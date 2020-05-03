@@ -1,3 +1,5 @@
+! This documentation is deprecated, but kept for historical reasons.
+
 !c  ********************************************************************
 !c  *                                                                  *
 !c  *                        subroutine sim3de                         *
@@ -5,8 +7,6 @@
 !c  ********************************************************************
 !c  Single Precision Version 1.1
 !c  Written by Gordon A. Fenton, Dalhousie University, Feb 18, 2003
-!c  Modified by Michael Crisp August 17, 2016
-!c  Latest Update: August 17, 2016
 !c
 !c  PURPOSE  to generate a realization of a 3-D elastic modulus field
 !c
@@ -166,10 +166,47 @@
 !c
 !c  REVISION HISTORY:
 !c  1.1	corrrected real*8 declarations of dlavx2, .. to dlavx3, .. (Jan 10/05)
-!c  1.2    Add in option for a 2D normally distributed output for boundary between layers
 !c---------------------------------------------------------------------------
 
 
+
+module sim3de 
+      
+      contains
+
+
+
+      subroutine transform_soil(efld,efldsize,sdata,stype)
+            !transform the original generated soil from zero-mean, unit-variance, normal distribution
+            !to a field of the desired statistics and distribution
+
+            implicit none
+
+            integer, intent(in) :: efldsize
+            real, intent(inout) :: efld(efldsize)
+            real, intent(in) :: sdata(4)
+            character, intent(in) :: stype
+
+            if(stype == 'n') then
+            
+                  efld = sdata(1) + efld * sdata(2)
+
+
+                  
+            else if(stype == 'l') then
+            
+                        efld = exp(sdata(3) + efld * sdata(4))
+                        
+            else if(stype == 'b') then
+            
+                        efld = sdata(1) + 0.5*(sdata(2)-sdata(1))*(1.0 + tanh((sdata(3)+sdata(4)*efld)/6.2831853))
+                        
+            else 
+                        write(*,*) 'Incorrect distribution selected. n = normal, l = lognormal, b = bounded.'
+                        
+            end if
+
+      end subroutine
 
       
       subroutine sim3d(efldgd,nxe,nye,nze,zroom,nxew,nyew,nzew,dx,dy,dz,kseed,MXM,MXK, &
@@ -265,31 +302,11 @@
         
 						
 !----------- scale subset to be exactly zero mean and unit variance -------
-            
-            mean = sum(efldgd(:,:,:nze))/size(efldgd(:,:,:nze))
-            sd = sqrt(sum((efldgd(:,:,:nze)-mean)**2)/(size(efldgd(:,:,:nze))-1))
+            mean = sum(efldgd)/size(efldgd)
+            sd = sqrt(sum((efldgd-mean)**2)/(size(efldgd)-1))
 
+           call transform_soil(efldgd,size(efldgd),sdata,stype)
 
-! ----------------------------- do neccessary transformations -----------------
-         
-           if(stype == 'n') then
-           
-				efldgd = sdata(1) + efldgd * sdata(2)
-
-
-				
-		   else if(stype == 'l') then
-		   
-				efldgd = exp(sdata(3) + efldgd * sdata(4))
-				
-		   else if(stype == 'b') then
-		   
-				efldgd = sdata(1) + 0.5*(sdata(2)-sdata(1))*(1.0 + tanh((sdata(3)+sdata(4)*efldgd)/6.2831853))
-				
-		   else 
-				write(*,*) 'Incorrect distribution selected. n = normal, l = lognormal, b = bounded.'
-				
-           end if
            
                 !mean = sum(efldgd)/size(efld)
                 !sd = sqrt(sum((efldgd)**2)/(n-1))
@@ -390,50 +407,8 @@ subroutine sim3d_nosubset(efld,nxe,nye,nze,zroom,nxew,nyew,nzew,dx,dy,dz,kseed,M
             
      
 
-
-! ----------------------------- do neccessary transformations -----------------
-
-
          
-           if(stype == 'n') then
-           
-				efld(:,:,:nze) = sdata(1) + efld(:,:,:nze) * sdata(2)
-
-
-				
-		   else if(stype == 'l') then
-		   
-				efld(:,:,:nze) = exp(sdata(3) + efld(:,:,:nze) * sdata(4))
-				
-		   else if(stype == 'b') then
-		   
-				efld(:,:,:nze) = sdata(1) + 0.5*(sdata(2)-sdata(1))*(1.0 + tanh((sdata(3)+sdata(4)*efld(:,:,:nze))/6.2831853))
-				
-		   else 
-				write(*,*) 'Incorrect distribution selected. n = normal, l = lognormal, b = bounded.'
-				
-           end if
-                
-            !mean = 0.0
-            !do z = 1,nze
-            !    do y = 1,nye
-            !        do x = 1,nxe
-            !            mean = mean + efld(x,y,z)
-            !        end do
-            !    end do
-            !end do
-            !mean = mean/(nxe*nye*nze)
-            !
-            !sd=0.0
-            !do z = 1,nze
-            !    do y = 1,nye
-            !        do x = 1,nxe
-            !            sd2 = efld(x,y,z) - mean
-            !            sd = sd + sd2**2
-            !        end do
-            !    end do
-            !end do
-            !sd = sqrt(sd/(nxe*nye*nze-1))
+            call transform_soil(efld,nxe*nye*nze,sdata,stype)
             
       
 
@@ -443,7 +418,7 @@ subroutine sim3d_nosubset(efld,nxe,nye,nze,zroom,nxew,nyew,nzew,dx,dy,dz,kseed,M
     end subroutine
       
     
-    
+end module
     
     
     

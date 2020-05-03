@@ -141,7 +141,7 @@ contains
 		else if(distribution == 'b') then
 			read (inn,*) sdata(1,1),sdata(1,2),sdata(1,3),sdata(1,4)
 		end if
-		read (inn,*) soilth(1)
+		read (inn,*) soilth(1), soilth(2)
         nodisksave = -1 !deprecated; changing this value shouldn't affect anything anymore
         
         
@@ -164,7 +164,7 @@ contains
         !overwrite some more variables if arguments are present
         if(num_args >= 4) then
         	soilth(1) = getarg_real()
- 
+            soilth(2) = soilth(1)
 ! 			nlayer = getarg_real()
 ! 			do i = 1,nlayer
 ! 				ldepths(i) = getarg_real()
@@ -479,8 +479,6 @@ contains
 		!read (inn,*) power_coeffs
         read (inn,*) costvals(2)
         read (inn,*) pilecost
-		read (inn,*)
-		read (inn,*)
 		
 		!Calculate failure cost limits
 		costvals(1) = 0 !lower limit is always 0 (zero cost for zero failure)
@@ -978,7 +976,7 @@ contains
         end if
         
         !check that bh_depths and bh_depths files exist
-        if(read_si == 2) then
+        if(read_si == 3) then
             inquire(file='input'//slash//'bh_depths.txt',exist=exists) !check if the file exists 
 		    if(.not. exists) then
                     write(*,*) 'Error, file does not exist:'
@@ -1038,7 +1036,7 @@ contains
 
                 read(666,*) inv_nbh(inv), temptest, tempred, tempdepth
                 
-                if(read_si == 1) then !process borehole depths and tests on a per-investigation basis
+                if(read_si == 2) then !process borehole depths and tests on a per-investigation basis
                 
                     !convert depth from metres to elements
                     inv_depths(:,inv,2) = nint(tempdepth/dz)
@@ -1077,7 +1075,7 @@ contains
         
         
         close(666)
-        if(read_si == 2) then
+        if(read_si == 3) then
             close(728)
             close(729)
         end if

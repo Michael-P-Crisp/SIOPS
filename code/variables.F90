@@ -1,6 +1,8 @@
 module variables
     
     use LAS1D
+    use sim3de 
+    use piecewise_CMD
     
     implicit none
     
@@ -17,8 +19,23 @@ module variables
     	real, allocatable :: bAT(:,:,:), bAC(:,:,:,:), bAS(:,:,:,:), bAI(:,:,:)
 		integer :: bM, bk1, bk2, bkk
         
-        !same as above, but for the 2D layer boundary LAS profiles
+        !same as above, but for the 1D CMD random field generator
 		real, allocatable :: C01D(:)
+        
+        !same as above, but for the piecewise 3D CMD random field generator
+        real(4), allocatable :: R0x(:), R0y(:), R0z(:)
+        
+        ! Pointer to desired 3D random field subroutine
+        procedure(no_arg_sub), pointer :: RF3D => NULL()
+        real soil_dummy_var ! a dummy argument is needed when calling the soil subroutine though a procedural pointer due to a bug in intel compiler version 16
+        
+        interface
+            subroutine no_arg_sub(dummy)
+            real, intent(in) :: dummy
+            end subroutine
+        end interface
+        
+        
         
         character(2), parameter :: rednames(6) = (/ 'SA','GA','HA','1Q','SD','MN' /) !reduction method names; hard-coded in SI module
         
@@ -52,7 +69,7 @@ module variables
         real(8) :: dx,dy,dz !size of elements (m)
 		character(6) :: varfnc,bvarfnc !correlation function to use for soil
         
-	    real(8) :: soilth(1) !horizontal (isotropic) SOF
+	    real(8) :: soilth(2) !horizontal and vertical SOF
         
         real(4), allocatable :: efld(:,:,:) !array for storing the output of a single layer LAS field by the sim3de algorithm
         real(4), allocatable :: bfld(:,:,:) !layer boundary depths for each layer
@@ -83,133 +100,185 @@ module variables
         !True: randomize each uniform layer stiffness in the true soil as opposed to having a single constant value across all Monte Carlo realisations
         !False: apply the randomness as a white noise field for the borehole samples
         logical :: rand_realisations = .true. 
+        
+        
+        
     
     
     contains
 
     
 
-	!get the sizes of the arrays for the soil correlation matrix and allocate them
+    !Get the sizes of the arrays for the soil correlation matrix, allocate them and calculate the required correlations.
+    !This prepares the 3D random field generators in the single layer mode. Alternatively, it prepares the 2D and 1D random
+    !   field generators for the multi layer mode.
+    !It also uses different 3D random field generators depending on whether the soil is isotropic.
 	subroutine soilsizes(istat)
 
 		implicit none
 
 		integer, intent(in) :: istat
 		integer j1,j2,j3,u1,u2,u3,ndiv,msize,j,i
+        
+        real(4), allocatable :: soiltemp(:,:,:)
 		
         real testrand(nzew)
+        integer input
+        real dummy
 		
-		integer nlayer
+        integer nlayer
+        
+        logical is_isotropic ! true if the soil is isotropic (vertical SOF = horizontal SOF)
 
         zroom = 5*nze/4
 
 
 		1  format(a,a,a)
 		2  format(a,e13.4)
-		3  format(a,i4,a,i4,a,i4,a,i4,a)
-		
-		!if false, scale the mean stiffness of the different layers rather than generating new soil 
-
-		u1 = nxe
-		u2 = nye
-		u3 = nze
-
-		do ndiv = 0, MXM
-			msize = u1*u2*u3
-			if( msize .le. MXK ) exit
-			j1 = u1/2
-			j2 = u2/2
-			j3 = u3/2
-			if( 2*j1 .ne. u1 .or. 2*j2 .ne. u2 .or. 2*j3 .ne. u3 ) exit
-			u1 = j1
-			u2 = j2
-			u3 = j3
-		end do
-
-		if(  msize .gt. MXK ) then
-			write(istat,1)'Error: unable to determine an acceptable combination of k1, k2, k3 and m'
-			write(istat,1)'       such that k1*2**m = N1, k2*2**m = N2 and k3*2**m = N3 for 3D LAS field.'
-			write(istat,3)'       k1 = ',u1,', k2 = ',u2,', k3 = ',u3,', m = ',ndiv
-			write(istat,3)'       (k1*k2*k3 must be less than ',MXK,' and m must be less than ',MXM,')'
-			write(istat,1)'       Try changing N1, N2, and/or N3.'
-            read(*,*)
-			stop
-		end if
-
-		allocate(C0(msize*(msize + 1)/2),CC(28,8,ndiv), CE(28,12,ndiv), CS(28,6,ndiv), CI(28,ndiv) &
-		,AC(8,7,8,ndiv), AE(12,7,12,ndiv), AS(18,7,6,ndiv), AI(27,7,ndiv) &
-		,ATC(4,7,4), ATS(6,7,4), ATI(9,7) &
-		,CTC(28,4), CTS(28,4), CTI(28))
-		
-		M = ndiv
-		k1=u1
-		k2=u2
-		k3=u3
-		kk=msize
-		
-		
-		
-		
-			!get soil correlation arrays for each layer
-	        call sim3d_init(nxe,nye,nze,dz,dz,dz,soilth(1),soilth(1),soilth(1),varfnc,MXM,MXK, &
-		    C0(:),CC(:,:,:),CE(:,:,:),CS(:,:,:),CI(:,:),AC(:,:,:,:),AE(:,:,:,:),AS(:,:,:,:),AI(:,:,:), &
-		    ATC(:,:,:), ATS(:,:,:), ATI(:,:),CTC(:,:),CTS(:,:),CTI(:),M,k1, k2, k3, kk)
+3          format(a,i4,a,i4,a,i4,a,i4,a)
+           
+        ! The soil is considered isotropic if the SOF in the horizontal and vertical directions is within a 1 mm tolerance (conservative tolerance)
+        is_isotropic = abs(soilth(1) - soilth(2)) < 0.001
+           
+           
+      
+           
+        if (singletrue) then
             
+            if(is_isotropic) then
+                !Use LAS if it's isotropic
+
+                u1 = nxe
+                u2 = nye
+                u3 = nze
+
+                do ndiv = 0, MXM
+                    msize = u1*u2*u3
+                    if( msize .le. MXK ) exit
+                    j1 = u1/2
+                    j2 = u2/2
+                    j3 = u3/2
+                    if( 2*j1 .ne. u1 .or. 2*j2 .ne. u2 .or. 2*j3 .ne. u3 ) exit
+                    u1 = j1
+                    u2 = j2
+                    u3 = j3
+                end do
+
+                if(  msize .gt. MXK ) then
+                    write(istat,1)'Error: unable to determine an acceptable combination of k1, k2, k3 and m'
+                    write(istat,1)'       such that k1*2**m = N1, k2*2**m = N2 and k3*2**m = N3 for 3D LAS field.'
+                    write(istat,3)'       k1 = ',u1,', k2 = ',u2,', k3 = ',u3,', m = ',ndiv
+                    write(istat,3)'       (k1*k2*k3 must be less than ',MXK,' and m must be less than ',MXM,')'
+                    write(istat,1)'       Try changing N1, N2, and/or N3.'
+                    read(*,*)
+                    stop
+                end if
+
+                allocate(C0(msize*(msize + 1)/2),CC(28,8,ndiv), CE(28,12,ndiv), CS(28,6,ndiv), CI(28,ndiv) &
+                ,AC(8,7,8,ndiv), AE(12,7,12,ndiv), AS(18,7,6,ndiv), AI(27,7,ndiv) &
+                ,ATC(4,7,4), ATS(6,7,4), ATI(9,7) &
+                ,CTC(28,4), CTS(28,4), CTI(28))
+                
+                M = ndiv
+                k1=u1
+                k2=u2
+                k3=u3
+                kk=msize
+
+                !get soil correlation arrays for each layer
+                call sim3d_init(nxe,nye,nze,dz,dz,dz,soilth(1),soilth(1),soilth(1),varfnc,MXM,MXK, &
+                C0(:),CC(:,:,:),CE(:,:,:),CS(:,:,:),CI(:,:),AC(:,:,:,:),AE(:,:,:,:),AS(:,:,:,:),AI(:,:,:), &
+                ATC(:,:,:), ATS(:,:,:), ATI(:,:),CTC(:,:),CTS(:,:),CTI(:),M,k1, k2, k3, kk)
+
+                if(superset) then
+                    RF3D => sim3dw_nosubset ! don't take a random subset, as this is done later
+                else
+                    RF3D => sim3dw  ! return a field of the exact working size
+                end if
+
             
+            else ! do anisotropic soils
+
+                !use the piecewise covariance matrix decomposition method
+                allocate(R0x(nxew*nxew), R0y(nyew*nyew), R0z(nzew*nzew))
+                allocate(soiltemp(nxew,nyew,nzew))
+                call piecewise_init(nxew,nyew,nzew,dz,soilth(1),soilth(2),bvarfnc,R0x,R0y,R0z)
+                
+                
+                
+                if(superset) then
+                    RF3D => cmd_pw_loop     ! this loop implementation is typically faster for large soils, so use it here
+                else
+                    RF3D => cmd_pw_matmul   
+                end if
+
+            end if
+
+        else
             
-        !same as above, but for the 2D layer boundary LAS profiles
+        !prepare random field generator for the 2D layer boundary LAS profiles
+
 		
-		u1 = nxe
-		u2 = nye
+            u1 = nxe
+            u2 = nye
 
-		do ndiv = 0, MXM
-			msize = u1*u2
-			if( msize .le. MXK ) exit
-			j1 = u1/2
-			j2 = u2/2
-			if( 2*j1 .ne. u1 .or. 2*j2 .ne. u2) exit
-			u1 = j1
-			u2 = j2
-		end do
+            do ndiv = 0, MXM
+                msize = u1*u2
+                if( msize .le. MXK ) exit
+                j1 = u1/2
+                j2 = u2/2
+                if( 2*j1 .ne. u1 .or. 2*j2 .ne. u2) exit
+                u1 = j1
+                u2 = j2
+            end do
 
 
-		if(  msize .gt. MXK ) then
-			write(istat,1)'Error: unable to determine an acceptable combination of k1, k2 and m'
-			write(istat,1)'       such that k1*2**m = N1 and k2*2**m = N2 for 2D LAS field.'
-			write(istat,3)'       k1 = ',u1,', k2 = ',u2,', m = ',ndiv
-			write(istat,3)'       (k1*k2 must be less than ',MXK,' and m must be less than ',MXM,')'
-			write(istat,1)'       Try changing N1 and/or N2.'
-			stop
+            if(  msize .gt. MXK ) then
+                write(istat,1)'Error: unable to determine an acceptable combination of k1, k2 and m'
+                write(istat,1)'       such that k1*2**m = N1 and k2*2**m = N2 for 2D LAS field.'
+                write(istat,3)'       k1 = ',u1,', k2 = ',u2,', m = ',ndiv
+                write(istat,3)'       (k1*k2 must be less than ',MXK,' and m must be less than ',MXM,')'
+                write(istat,1)'       Try changing N1 and/or N2.'
+                stop
+            end if
+            
+            allocate(bC0((msize*(msize + 1))/2),bCT(6,2), bCC(6,4,ndiv), bCS(6,4,ndiv), bCI(6,ndiv) &
+            ,bAT(3,3,2), bAC(4,3,4,ndiv), bAS(6,3,4,ndiv), bAI(9,3,ndiv))
+            
+            bM = ndiv
+            bk1=u1
+            bk2=u2
+            bkk=msize
+
+                call sim2sd_init(nxe,nye,dz,dz,bsof,bsof,bvarfnc,MXM,MXK, &
+                bC0(:),bCT(:,:),bCC(:,:,:),bCS(:,:,:),bCI(:,:),bAT(:,:,:),bAC(:,:,:,:),bAS(:,:,:,:),bAI(:,:,:), &
+                bM,bk1,bk2,bkk) !boundary random noise generation
+
+
+        !Prepare 1D random field generator, which will be used in the multi-layer hybrid mode
+
+            !setup 1D random field generator; covariance matrix decomposition method
+            allocate(C01D((nxe*(nxe + 1))/2))
+            
+            call sim1sd_init(nzew,dz,soilth(1),bvarfnc,C01D)
+            
+            !test it (seems to work)
+            call las1g( testrand, nzew ,C01D)
+
         end if
         
-        allocate(bC0((msize*(msize + 1))/2),bCT(6,2), bCC(6,4,ndiv), bCS(6,4,ndiv), bCI(6,ndiv) &
-		,bAT(3,3,2), bAC(4,3,4,ndiv), bAS(6,3,4,ndiv), bAI(9,3,ndiv))
         
-        bM = ndiv
-		bk1=u1
-		bk2=u2
-		bkk=msize
+    
+        
 
-            call sim2sd_init(nxe,nye,dz,dz,bsof,bsof,bvarfnc,MXM,MXK, &
-            bC0(:),bCT(:,:),bCC(:,:,:),bCS(:,:,:),bCI(:,:),bAT(:,:,:),bAC(:,:,:,:),bAS(:,:,:,:),bAI(:,:,:), &
-            bM,bk1,bk2,bkk) !boundary random noise generation
-
-        !setup 1D random field generator CMD method
-        allocate(C01D((nxe*(nxe + 1))/2))
-        
-        call sim1sd_init(nzew,dz,soilth(1),bvarfnc,C01D)
-        
-        !test it (seems to work)
-        call las1g( testrand, nzew ,C01D)
-        
-		
 
     end subroutine
     
     
     !wrapper for the sim3d subroutine that generates virtual soils
-    subroutine sim3dw()
+    subroutine sim3dw(dummy)
     
+    real, intent(in) :: dummy
     call sim3d(efld,nxe,nye,nze,zroom,nxew,nyew,nzew,dx,dy,dz,kseed,MXM,MXK, &
                       C0,CC,CE,CS,CI,AC,AE,AS,AI,ATC, ATS, ATI,CTC,CTS,CTI,M,k1,k2,k3,kk,sdata,distribution,anisotropy)
     
@@ -217,8 +286,9 @@ module variables
     
     
     !wrapper for the sim3d subroutine that generates virtual soils
-    subroutine sim3dw_nosubset()
+    subroutine sim3dw_nosubset(dummy)
     
+    real, intent(in) :: dummy
     call sim3d_nosubset(efld,nxe,nye,nze,zroom,nxew,nyew,nzew,dx,dy,dz,kseed,MXM,MXK, &
                       C0,CC,CE,CS,CI,AC,AE,AS,AI,ATC, ATS, ATI,CTC,CTS,CTI,M,k1,k2,k3,kk,sdata,distribution,anisotropy)
     
@@ -233,6 +303,31 @@ module variables
     
     end subroutine
     
+            
+    
+    subroutine cmd_pw_loop(dummy)
+    
+    real, intent(in) :: dummy
+		
+    call cmd_piecewise_loop(efld, nxew,nyew,nzew ,R0x, R0y, R0z,sdata, distribution)
+    
+    end subroutine
+        
+    
+    
+    subroutine cmd_pw_matmul(dummy)
+    
+    real, intent(in) :: dummy
+    
+    call cmd_piecewise_matmul(efld, nxew,nyew,nzew ,R0x, R0y, R0z,sdata, distribution)
+    
+    
+    end subroutine
+    
+    
+    
 	
 
-end module
+    end module
+
+    

@@ -29,8 +29,11 @@ subroutine get_ck_set(soilseeds & !soil generation variables
                       
 ! ----- soil generation variables (don't touch) ----
 
-      integer NGS !virtual soil
-      real(4) :: efldave(nxew,nyew,nzew) !averaged virtual soil across MC realisations
+      integer NGS
+
+ !virtual soil
+      real(4) :: efldave(nxew,nyew,nzew)
+ !averaged virtual soil across MC realisations
       integer, intent(in) :: soilseeds(:)
       
       real(4) :: sdata_ck(4) !CK soil parameters, same as SI but with unit mean stiffness
@@ -161,7 +164,7 @@ subroutine get_ck_set(soilseeds & !soil generation variables
 	if (singletrue .and. superset) then
 		write(*,*) 'Generating soil superset'
         kseed = randu(soilseeds(1)) * 1234567890 !ensure random numbers are consistent across MC realisations
-        call sim3dw_nosubset() !Get soil
+        call RF3D(soil_dummy_var)!Get soil
         write(*,*)
         efld = log(efld) !log it here so it doesn't have to be done later; part of the PIE weighted geometric average calculation
     end if
@@ -223,7 +226,8 @@ subroutine get_ck_set(soilseeds & !soil generation variables
 
         !get sum of soil weights for weighted average calculation
 
-	write(*,*) 'Determining true pile settlements'
+
+	write(*,*) 'Determining true pile settlements'
     call cpu_time(start)   
     do iter = 1,nrep_MC
 
@@ -277,7 +281,7 @@ subroutine get_ck_set(soilseeds & !soil generation variables
                 if(usepie) then !use pie method to get settlement
                     ! --- generate soil ---
                     kseed = randu(soilseeds(iter)) * 1234567890 !ensure random numbers are consistent across MC realisations
-                    call sim3dw()
+                    call RF3D(soil_dummy_var)
                     !efld = efld - efldave !subtract average field for reasons given above
             
             
@@ -299,7 +303,7 @@ subroutine get_ck_set(soilseeds & !soil generation variables
             
                     ! --- generate soil ---
                     kseed = randu(soilseeds(iter)) * 1234567890 !ensure random numbers are consistent across MC realisations
-                    call sim3dw()
+                    call RF3D(soil_dummy_var)
                     efld = efld - efldave !subtract average field for reasons given above
             
 			        do x=1,preps(1)*preps(2)
@@ -415,7 +419,8 @@ subroutine get_ck_set(soilseeds & !soil generation variables
         end if
 		open(500,file=str2)
 		do i = 1,nrep_MC
-			write(500,'(100000(E14.7,X))') (ck_pset(pd,i,x),pd=1,npdepths) !'(1000000(E11.6,X))'
+			write(500,'(100000(E14.7,X))') (ck_pset(pd,i,x),pd=1,npdepths)
+ !'(1000000(E11.6,X))'
 		end do
 		close(500)
 	end do

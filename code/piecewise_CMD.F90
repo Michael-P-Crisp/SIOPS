@@ -1,4 +1,6 @@
 module piecewise_CMD
+
+  use sim3de !uses the soil transformation subroutine from this module 
     
     !This module contains subroutines for a method for generating 3D random fields using
     !a piecewise covariance decomposition method. The advantage over LAS is that it allows
@@ -206,12 +208,14 @@ module piecewise_CMD
       !Generate the piecewise 3D random field through nested do loops.
       !This may be faster for very large soils due to hardware cache interaction.
 
-    subroutine cmd_piecewise_loop( soil, nxe,nye,nze ,R0x, R0y, R0z)
+    subroutine cmd_piecewise_loop( soil, nxe,nye,nze ,R0x, R0y, R0z,sdata, stype)
       !use, intrinsic :: ISO_C_BINDING
       real(4), intent(out) :: soil(nxe,nye,nze)
       real(4) :: U(nxe,nye,nze)
       integer, intent(in) :: nxe,nye,nze
       real(4), intent(in) :: R0x(nxe,nxe), R0y(nye,nye), R0z(nze,nze)
+      real(4), intent(in) :: sdata(4)
+      character, intent(in) :: stype
       integer init
       integer L,i,j,x,y,z,x2 !loop counters
       real start, finish
@@ -219,12 +223,8 @@ module piecewise_CMD
 !c-------------------------------------- generate realization -----------------
       iz = 0
 !c                     generate field
-      
-      
 
-      write(*,*) 'in loop'
-      
-      call cpu_time(start)
+      ! call cpu_time(start)
       
       ! get random numbers
       call vnorm( U, nxe*nye*nze )
@@ -274,14 +274,14 @@ module piecewise_CMD
     end do
       
      
-      call cpu_time(finish)
-      write(*,*) finish-start
+      ! call cpu_time(finish)
+      ! write(*,*) finish-start
       
     !open(505,file='piecewise.dat',access='stream')
     !write(505) soil
     !close(505)
 
-    
+    call transform_soil(soil,size(soil),sdata,stype)
       
     
     end subroutine
@@ -290,25 +290,22 @@ module piecewise_CMD
        !Generate the piecewise 3D random field through matmul.
       !This may be faster for smaller fields.
     
-       subroutine cmd_piecewise_matmul( soil, nxe,nye,nze ,R0x, R0y, R0z)
+       subroutine cmd_piecewise_matmul( soil, nxe,nye,nze ,R0x, R0y, R0z, sdata, stype)
       !use, intrinsic :: ISO_C_BINDING
       real(4), intent(out) :: soil(nxe,nye,nze)
       real(4) :: U(nxe,nye,nze)
       integer, intent(in) :: nxe,nye,nze
       real(4), intent(in) :: R0x(nxe,nxe), R0y(nye,nye), R0z(nze,nze)
+      real(4), intent(in) :: sdata(4)
+      character, intent(in) :: stype
       integer init
       integer L,i,j,x,y,z
-      real start, finish
 
 !c-------------------------------------- generate realization -----------------
       iz = 0
 !c                     generate field
       
-      
-        write(*,*) 'in matmul'
-      
-      
-      call cpu_time(start)
+
       
       ! get random numbers
       call vnorm( U, nxe*nye*nze )
@@ -345,10 +342,7 @@ module piecewise_CMD
       end do
       
      
-      call cpu_time(finish)
-      write(*,*) finish-start
-      
-    read(*,*)
+      call transform_soil(soil,size(soil),sdata,stype)
     !  
     ! 
     !

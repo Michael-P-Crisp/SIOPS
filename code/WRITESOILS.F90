@@ -90,7 +90,7 @@ implicit none
 				if(mod(i,nrep_MC/10)==0) write(*,'(I0,A,X)',advance='no') i*100/nrep_MC,'%'
 			
                 kseed = randu(soilseeds(i)) * 1234567890    !ensure random numbers are consistent across MC realisations
-				call sim3dw()
+				call RF3D(soil_dummy_var)
 				!write(str2,'(A,I0,A)') 'soildata/soil',i,'.dat'  
 				
 				!save soil to file in a compact and fast binary format (this format might be machine or compiler-specific..). Subtract to get
@@ -169,7 +169,7 @@ subroutine avesoil(soilseeds,nrep_MC,datafolder,efldave)
 			if(mod(i,nrep_MC/10)==0) write(*,'(I0,A,X)',advance='no') i*100/nrep_MC,'%'
 			
 			kseed = randu(soilseeds(i)) * 1234567890    !ensure random numbers are consistent across MC realisations
-			call sim3dw()
+			call RF3D(soil_dummy_var)
 				 
 			efldavedb = efldavedb + efld !Do the sum part of the average.
 
@@ -226,7 +226,7 @@ subroutine exportsoil(soilseeds,nrep_MC,datafolder)
       !only save soils if the first number is greater than 0
 	  if (soil_reps(1) > 0) then
 	  
-	  	write(*,'(A,I0,A,I0)') 'Exporting soils to CSVs. Doing range ',soil_reps(1),' - ',soil_reps(2)
+	  	write(*,'(A,I0,A,I0)') 'Exporting soils to CSVs. Doing range ',soil_reps(1),' - ',abs(soil_reps(2))
         
         
         if(.not. singletrue) then
@@ -245,7 +245,7 @@ subroutine exportsoil(soilseeds,nrep_MC,datafolder)
         end if
         
         !generate big single layer here if specified
-        if(singletrue .and. superset) call sim3dw()
+        if(singletrue .and. superset) call RF3D(soil_dummy_var)
         
         
 		do i = soil_reps(1),abs(soil_reps(2))     !Loop through Monte Carlo realisations
@@ -261,7 +261,7 @@ subroutine exportsoil(soilseeds,nrep_MC,datafolder)
                    
                    call savetofile(efld(xpos+1:xpos+nxew,ypos+1:ypos+nyew,zpos+1:zpos+nzew),str2,i)
                 else !otherwise generate individual soils
-			       call sim3dw()       !call single layer soil
+                   call RF3D(soil_dummy_var)       !call single layer soil
                    efld = efld * emean
                    call savetofile(efld,str2,i)
                 end if

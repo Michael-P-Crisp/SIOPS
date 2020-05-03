@@ -216,7 +216,7 @@ contains
                 ! You must guarentee that the soils generated here (efld) are IDENTICAL to those produced in the PROCESS_CK subroutine.
                 
                 
-                call sim3dw()
+                call RF3D(soil_dummy_var)
 							      
 				!efld = efld - efldave !subtract average field to ensure the mean everywhere is zero
                 

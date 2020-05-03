@@ -255,6 +255,7 @@ program main
     
     integer num_args !number of arguments passed to the program (overwrites input file)
 
+    real dummy
 
 	!---------------------------- READ IN INFORMATION AND PERFORM INITIAL SET UP ------------------------------- -check:arg_temp_created
 
@@ -290,6 +291,7 @@ program main
 	
 	!calculate the size of the correlation arrays and allocate them. Build the autocorrelation matrices for virtual soil generation.
 	call soilsizes(istat)
+    
     
 
 	!if runmode == 'al' (all), then figure out which components need to be done based on the 
@@ -367,7 +369,7 @@ program main
 	    if (singletrue .and. superset) then
 	    	write(*,*) 'Generating soil superset'
             kseed = randu(soilseeds(1)) * 1234567890 !ensure random numbers are consistent across MC realisations
-            call sim3dw_nosubset() !Get soil
+            call RF3D(soil_dummy_var)
             !open(3579, file='supersoil.dat', access="stream")
             !!!call outputstats(nxe,nye,nze,dz,dz,dz,efld(:nxe,:nye,:nze),15.,1.)
             !!
@@ -394,7 +396,7 @@ program main
     	!Recommend 2000 MC realisations when calculating probability of failure, and 8000 MC realisations when calculating failure cost.
         if(deterministic == 1) then
             
-            if (read_si > 0) then
+            if (read_si > 1) then
 				!read in the full set of data for individual investigations to analyse. 
 				!This input can be typed out manually, but is usually the output/product of the evolutionary subroutine for the purpose of a deterministic costing analysis
 				call input_SI(nbhmax,sampfreq,inv_coords,inv_depths,inv_nbh,inv_test,ninv,inv_reduction,percentile,s_dev,si_performance,dz,testnames,deterministic,in_sdev,in_percentile,soildsc,goodcases, read_si)

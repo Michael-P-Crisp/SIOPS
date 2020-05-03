@@ -30,6 +30,7 @@
 !c-------------------------------------------------------------------------
       module soilstat
 
+    !Warning, this doesn't seem to be providing the correct results.
 
     contains
 
