@@ -126,8 +126,6 @@ contains
 		!read in single layer options
 
 		read (inn,*) distribution
-		!read (inn,*) anisotropy
-        anisotropy = 1 !anything other than 1 isn't really supported
 		if(distribution == 'n' .or. distribution == 'l') then
 			read (inn,*) sdata(1,1),sdata(1,2)
 			if(num_args >= 2) then !if an argument is present, then use that instead
@@ -173,7 +171,7 @@ contains
 ! 				lmean_ave(i) = getarg_real()
 ! 			end do
         end if
-        
+        anisotropy = nint(soilth(1)/soilth(2))
         
         
         if(num_args >= 5) bsd = nint(getarg_real())
@@ -190,12 +188,9 @@ contains
         
 
 		!convert some input variables into element-compatible units:
-		
-
 		nxew=xdim/dz
 		nyew=ydim/dz
 		nzew=zdim/dz
-		nze = nze * anisotropy !get a deeper field to be able to scale coordinates later
 
 		
 		!calculate lognormal parameters 
@@ -211,7 +206,11 @@ contains
                 nye = nye * superscale
                 nze = nze * superscale
                 !allocate full soil field
-		        allocate(efld(nxe,nye,5*nze/4))
+                if (anisotropy == 1) then
+                    allocate(efld(nxe,nye,5*nze/4)) !LAS needs a bit of extra room for storage 
+                else
+                    allocate(efld(nxe,nye,nze))
+                end if
             else
                 allocate(efld(nxew,nyew,nzew))
             end if
@@ -229,7 +228,7 @@ contains
 		!---------print some error messages from incorrect input --------
 
 
-		if(nxew > nxe .or. nyew > nye .or. nzew*anisotropy > nze) then
+		if(nxew > nxe .or. nyew > nye .or. nzew > nze) then
 			write(istat,*) "error: working field is bigger than generated field"
 			write(istat,*) "working field dimensions (x,y,z) are:" ,nxew,nyew,nzew
 			write(istat,*) "generated field dimensions are:" ,nxe,nye,nze/anisotropy

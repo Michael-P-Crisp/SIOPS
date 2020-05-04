@@ -60,7 +60,7 @@ module checkfiles
                 end if
 			
 		    else
-				
+				! this didn't seem to work for some reason. Investigate
 			    open(667, file= str2,status='old')
 			    read(667,*) 
 			    do i = 1,npdepths
@@ -109,7 +109,7 @@ module checkfiles
 			
             else !if all the files are here, check to see that the files themselves are complete
             
-            
+                ! this needs a check here
                 allocate(startstress(3,npdepths))
                 write(str2,'(A,A,I0,A,F4.2,A)') trim(datafolder),'model_bounds_prad-',prad(1),'_esize-',dz,'.txt'
 	            open(667,file=str2,status='old')

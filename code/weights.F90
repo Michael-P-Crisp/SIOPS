@@ -283,6 +283,7 @@ do pd = 1,npdepths
     
 
     maxstress = maxval(sw(pd,:,:,:))
+    startstress(:,pd) = 0
     
     do xi = srad,1,-1
         startstress(1,pd) = startstress(1,pd) + 1

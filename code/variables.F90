@@ -185,7 +185,7 @@ module variables
                 k3=u3
                 kk=msize
 
-                !get soil correlation arrays for each layer
+                !get soil correlation arrays
                 call sim3d_init(nxe,nye,nze,dz,dz,dz,soilth(1),soilth(1),soilth(1),varfnc,MXM,MXK, &
                 C0(:),CC(:,:,:),CE(:,:,:),CS(:,:,:),CI(:,:),AC(:,:,:,:),AE(:,:,:,:),AS(:,:,:,:),AI(:,:,:), &
                 ATC(:,:,:), ATS(:,:,:), ATI(:,:),CTC(:,:),CTS(:,:),CTI(:),M,k1, k2, k3, kk)
@@ -198,18 +198,18 @@ module variables
 
             
             else ! do anisotropic soils
-
                 !use the piecewise covariance matrix decomposition method
-                allocate(R0x(nxew*nxew), R0y(nyew*nyew), R0z(nzew*nzew))
-                allocate(soiltemp(nxew,nyew,nzew))
-                call piecewise_init(nxew,nyew,nzew,dz,soilth(1),soilth(2),bvarfnc,R0x,R0y,R0z)
                 
-                
-                
-                if(superset) then
+                if(superset) then !If storing a single big soil in memory...
+                    allocate(R0x(nxe*nxe), R0y(nye*nye), R0z(nze*nze))  ! allocate a larger soil
                     RF3D => cmd_pw_loop     ! this loop implementation is typically faster for large soils, so use it here
+                    ! get correlation arrays
+                    call piecewise_init(nxe,nye,nze,dz,soilth(1),soilth(2),bvarfnc,R0x,R0y,R0z)
                 else
+                    allocate(R0x(nxew*nxew), R0y(nyew*nyew), R0z(nzew*nzew))
                     RF3D => cmd_pw_matmul   
+                    ! get correlation arrays
+                    call piecewise_init(nxew,nyew,nzew,dz,soilth(1),soilth(2),bvarfnc,R0x,R0y,R0z)
                 end if
 
             end if
@@ -309,7 +309,7 @@ module variables
     
     real, intent(in) :: dummy
 		
-    call cmd_piecewise_loop(efld, nxew,nyew,nzew ,R0x, R0y, R0z,sdata, distribution)
+    call cmd_piecewise_loop(efld, nxe,nye,nze ,R0x, R0y, R0z,sdata, distribution)
     
     end subroutine
         

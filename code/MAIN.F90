@@ -291,17 +291,15 @@ program main
 	
 	!calculate the size of the correlation arrays and allocate them. Build the autocorrelation matrices for virtual soil generation.
 	call soilsizes(istat)
-    
-    
 
-	!if runmode == 'al' (all), then figure out which components need to be done based on the 
-	!existence and size of files in the data folder, compared to the inputs
-	call checkdata(runmode,datafolder,npdepths,preps(1)*preps(2),nrep_MC,thismode,startstress,prad,soilweight)
 	
 	!Export a range of virtual soils as CSVs if soil_reps(1) is greater than 1.
 	!X is varying first, then Y, then Z the slowest.
-
-	call exportsoil(soilseeds,nrep_MC,datafolder)
+    call exportsoil(soilseeds,nrep_MC,datafolder)
+    
+    !if runmode == 'al' (all), then figure out which components need to be done based on the 
+	!existence and size of files in the data folder, compared to the inputs
+	call checkdata(runmode,datafolder,npdepths,preps(1)*preps(2),nrep_MC,thismode,startstress,prad,soilweight)
 
 	
 		!------------------------------ GET FEA PILE INFORMATION  --------------------------------
@@ -365,7 +363,7 @@ program main
 		!call storesoils(soilseeds,nrep_MC,datafolder)
 
             !Get a very big soil from which to extract a subset (for superset mode)
-        !Note that superset won't work properly with anisotropy or with FEM specified for CK analysis.
+        !Note that superset won't work properly with FEM specified for CK analysis.
 	    if (singletrue .and. superset) then
 	    	write(*,*) 'Generating soil superset'
             kseed = randu(soilseeds(1)) * 1234567890 !ensure random numbers are consistent across MC realisations
@@ -469,9 +467,17 @@ program main
         else if(deterministic == 3) then
         	
 			
-			!Set up inputs for each investigation.
-			call EA_SI(soffset,swidth,nbhmax,in_tests,in_depths,in_reductions,bhnums,testerrors,sampfreq,in_sdev,in_percentile, &		!input variables
-				inv_coords,inv_depths,inv_nbh,inv_test,ninv,inv_reduction,percentile,s_dev,si_performance)	 !output variables
+
+                
+            if (read_si > 1) then
+                !read in the full set of data for individual investigations to analyse. 
+                !This input can be typed out manually, but is usually the output/product of the evolutionary subroutine for the purpose of a deterministic costing analysis
+                call input_SI(nbhmax,sampfreq,inv_coords,inv_depths,inv_nbh,inv_test,ninv,inv_reduction,percentile,s_dev,si_performance,dz,testnames,deterministic,in_sdev,in_percentile,soildsc,goodcases, read_si)
+            else
+                !Set up inputs for each investigation.
+                call EA_SI(soffset,swidth,nbhmax,in_tests,in_depths,in_reductions,bhnums,testerrors,sampfreq,in_sdev,in_percentile, &		!input variables
+                inv_coords,inv_depths,inv_nbh,inv_test,ninv,inv_reduction,percentile,s_dev,si_performance)	 !output variables
+            end if
 	
             write(*,'(A,X,I0,X,A)') "Performing Evolutionary Algorithm to optimise",ninv,"site investigations (borehole locations)."
             

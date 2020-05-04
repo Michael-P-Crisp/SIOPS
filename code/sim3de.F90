@@ -291,14 +291,11 @@ module sim3de
 		!kseed=randu(kseed)*1234567890
 		ypos=NINT(randu(0)*(nye-nyew))
 		if(ypos==0) ypos=1
-		zpos=NINT(randu(0)*(nze - nzew * anisotropy))
+		zpos=NINT(randu(0)*(nze - nzew))
 		if(zpos==0) zpos=1
 		
-		if(anisotropy == 1) then !if isotropic, simply extract subset
-			efldgd = efld(xpos:xpos+nxew-1,ypos:ypos+nyew-1,zpos:zpos+nzew-1)
-		else	!otherwise take every xth element with depth where x is the degree of anisotropy
-			efldgd = efld(xpos:xpos+nxew-1,ypos:ypos+nyew-1,(/ (j,j=zpos,zpos+nzew*anisotropy-1,anisotropy) /))
-        end if 
+		
+		efldgd = efld(xpos:xpos+nxew-1,ypos:ypos+nyew-1,zpos:zpos+nzew-1)
         
 						
 !----------- scale subset to be exactly zero mean and unit variance -------

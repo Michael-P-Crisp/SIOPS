@@ -1,6 +1,6 @@
 F90 = gfortran
-COMPILER_OPTIONS =  -O0 -g -fbacktrace -fcheck=all -ffree-line-length-none #-ffpe-trap=zero,overflow,underflow -g -fbacktrace -fcheck=all
-LINKER_OPTIONS =  -O0 -g -fbacktrace -fcheck=all -ffree-line-length-none #-ffpe-trap=zero,overflow,underflow -g -fbacktrace -ffast-math
+COMPILER_OPTIONS = -O3  -ffree-line-length-none #  -O0 -g -fbacktrace -fcheck=all  #-ffpe-trap=zero,overflow,underflow -g -fbacktrace -fcheck=all
+LINKER_OPTIONS =  #-O0 -g -fbacktrace -fcheck=all -ffree-line-length-none #-ffpe-trap=zero,overflow,underflow -g -fbacktrace -ffast-math
 
 execname = soil
 

@@ -110,6 +110,8 @@ subroutine get_ck_set(soilseeds & !soil generation variables
 	close(667)
     
     
+    write(*,*) shape(startstress), maxval(soilweight)
+
     if(singletrue) then
         centerpie(1) = maxval(startstress(1,:)) + 1
         centerpie(2) = maxval(startstress(2,:)) + 1
