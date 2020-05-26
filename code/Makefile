@@ -1,6 +1,6 @@
 F90 = gfortran
 COMPILER_OPTIONS = -O3 -ffree-line-length-none #-ffpe-trap=zero,overflow,underflow -g -Og -fbacktrace -fcheck=all
-LINKER_OPTIONS =  
+LINKER_OPTIONS = -static 
 
 execname = soil
 
