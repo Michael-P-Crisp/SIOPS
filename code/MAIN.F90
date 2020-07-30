@@ -245,7 +245,7 @@ program main
 
 	!---------------------------- READ IN INFORMATION AND PERFORM INITIAL SET UP ------------------------------- -check:arg_temp_created
 
-	write(*,*) 'Starting SIOPS Software'
+	write(*,*) 'Starting SIOPS Software v1.2'
 
 	istat=99 !file number for problem output
 	open(istat,file='potential_problems.txt')

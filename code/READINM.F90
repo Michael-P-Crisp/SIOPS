@@ -59,7 +59,8 @@ contains
             write(*,*) '    pile_input.txt'
             write(*,*)
             write(*,*) "Would you like to generate example files in the program directory?"
-            write(*,*) "If so press '1', otherwise press any key to exit."
+            write(*,*) "If so press '1' then 'enter'."
+            write(*,*) "Otherwise, press 'enter' key to exit."
             read(*,'(I1)',iostat=istat) choice
             !if a number was entered, and the number is '1', then save the output.
             if(istat == 0 .and. choice == 1) call save_templates()
