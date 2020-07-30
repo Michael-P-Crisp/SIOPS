@@ -72,12 +72,9 @@
 		jseed=randu(jseed)*1234567890
 		xpos=NINT(randu(jseed)*(nxe-nxew))
 		if(xpos==0) xpos=1
-		jseed=randu(jseed)*1234567890
 		ypos=NINT(randu(jseed)*(nye-nyew))
 		if(ypos==0) ypos=1
 
-		!subset layer roughness
-		cfld = efld(xpos:xpos+nxew-1,ypos:ypos+nyew-1) 
 	
 	  !----------- scale subset to be exactly zero mean and unit variance -------
             
@@ -88,19 +85,19 @@
             
             !cfld = (cfld-mean) !/sd
 
-	  !---------------- apply neccessary transformations ----------------
+	  !---------------- apply neccessary transformations on desired soil subset----------------
 	              
            if(stype == 'n') then
            
-				cfld = sdata(1) + cfld * sdata(2)
+				cfld = sdata(1) + efld(xpos:xpos+nxew-1,ypos:ypos+nyew-1) * sdata(2)
 				
 		   else if(stype == 'l') then
-		   
-				cfld = exp(sdata(3) + cfld * sdata(4))
+		        !should be exp(cfld) but this is done elsewhere in the code for optimisation reasons
+				cfld = sdata(3) + efld(xpos:xpos+nxew-1,ypos:ypos+nyew-1) * sdata(4)
 				
 		   else if(stype == 'b') then
 		   
-				cfld = sdata(1) + 0.5*(sdata(2)-sdata(1))*(1.0 + tanh((sdata(3)+sdata(4)*cfld)/6.2831853))
+				cfld = sdata(1) + 0.5*(sdata(2)-sdata(1))*(1.0 + tanh((sdata(3)+sdata(4)*efld(xpos:xpos+nxew-1,ypos:ypos+nyew-1))/6.2831853))
 				
 		   else 
 				write(*,*) 'Incorrect distribution selected. n = normal, l = lognormal, b = bounded.'

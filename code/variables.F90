@@ -14,9 +14,10 @@ module variables
 		integer :: M, k1, k2, k3, kk
         
         !same as above, but for the 2D layer boundary LAS profiles
-		real, allocatable :: bC0(:)
-    	real, allocatable :: bCT(:,:), bCC(:,:,:), bCS(:,:,:), bCI(:,:)
-    	real, allocatable :: bAT(:,:,:), bAC(:,:,:,:), bAS(:,:,:,:), bAI(:,:,:)
+        !first index is for Young's modulus vs layer boundary
+		real, allocatable :: bC0(:,:)
+    	real, allocatable :: bCT(:,:,:), bCC(:,:,:,:), bCS(:,:,:,:), bCI(:,:,:)
+    	real, allocatable :: bAT(:,:,:,:), bAC(:,:,:,:,:), bAS(:,:,:,:,:), bAI(:,:,:,:)
 		integer :: bM, bk1, bk2, bkk
         
         !same as above, but for the 1D CMD random field generator
@@ -58,7 +59,8 @@ module variables
         integer :: zroom !extra space needed in LAS for storing previous stages of the field
         integer :: MXM,MXK !max number of subdivisions, max dimension of stage-0 profile
         
-        integer :: anisotropy !degree of anisotropy (hardcoded to be constant for all layers for now) reduces vertical SOF by this factor
+        integer :: anisotropy !degree of anisotropy 
+        logical is_isotropic ! true if the soil is isotropic (vertical SOF = horizontal SOF)
         character(1) distribution !distribution for soil. 'n' = normal, 'l' = lognormal (recommended), 'b' = beta
 	    logical :: singletrue !true if using a single, variable layer. False if using multi-layered soils with uniform properties
         
@@ -92,14 +94,21 @@ module variables
         
         
         !pile-related variables 
-        
+        logical var_props !whether the Young's modulus properties in each layer are represented by a 2D random field in the multi-layer case
         real :: buildingarea !building area (m**2)
         integer multitype !whether the layer depths at piles are treated as (1) a single point in SI and CK, (2) inverse weighted in CK, (3) inverse weighted in SI and CK
 		
+        real, allocatable :: CKprops(:,:,:) !estimate of Young's modulus at each pile for the multiple layer analysis
         
+        ! how to tread random young's modulus in multi-layer soils
+        ! 0 = zero randomness, even if COV is specified
+        ! 1 = zero randomness within each layer, however the stiffness of each layer randomly varies across Monte Carlo realisations according to a lognormal distribution
+        ! 2 = The stiffness of each layer is represented as a 2D random field
+        ! 3 = Same as 2, but additionally, boreholes encounter a lognormally-distributed 1D random field with a mean equal to the value in the 2D field. 
+        	!This reduces the COV of both distributions by 2/3 to compensate for the increased variability.
         !True: randomize each uniform layer stiffness in the true soil as opposed to having a single constant value across all Monte Carlo realisations
-        !False: apply the randomness as a white noise field for the borehole samples
-        logical :: rand_realisations = .true. 
+        !False: apply the randomness as having a 2D random field represent the properties of each layer.
+        integer :: rand_realisations 
         
         
         
@@ -128,7 +137,7 @@ module variables
 		
         integer nlayer
         
-        logical is_isotropic ! true if the soil is isotropic (vertical SOF = horizontal SOF)
+        
 
         zroom = 5*nze/4
 
@@ -137,8 +146,7 @@ module variables
 		2  format(a,e13.4)
 3          format(a,i4,a,i4,a,i4,a,i4,a)
            
-        ! The soil is considered isotropic if the SOF in the horizontal and vertical directions is within a 1 mm tolerance (conservative tolerance)
-        is_isotropic = abs(soilth(1) - soilth(2)) < 0.001
+        
            
            
       
@@ -242,28 +250,33 @@ module variables
                 stop
             end if
             
-            allocate(bC0((msize*(msize + 1))/2),bCT(6,2), bCC(6,4,ndiv), bCS(6,4,ndiv), bCI(6,ndiv) &
-            ,bAT(3,3,2), bAC(4,3,4,ndiv), bAS(6,3,4,ndiv), bAI(9,3,ndiv))
+            allocate(bC0(2,(msize*(msize + 1))/2),bCT(2,6,2), bCC(2,6,4,ndiv), bCS(2,6,4,ndiv), bCI(2,6,ndiv) &
+            ,bAT(2,3,3,2), bAC(2,4,3,4,ndiv), bAS(2,6,3,4,ndiv), bAI(2,9,3,ndiv))
             
             bM = ndiv
             bk1=u1
             bk2=u2
             bkk=msize
 
+            !boundary random noise generation
                 call sim2sd_init(nxe,nye,dz,dz,bsof,bsof,bvarfnc,MXM,MXK, &
-                bC0(:),bCT(:,:),bCC(:,:,:),bCS(:,:,:),bCI(:,:),bAT(:,:,:),bAC(:,:,:,:),bAS(:,:,:,:),bAI(:,:,:), &
-                bM,bk1,bk2,bkk) !boundary random noise generation
+                bC0(1,:),bCT(1,:,:),bCC(1,:,:,:),bCS(1,:,:,:),bCI(1,:,:),bAT(1,:,:,:),bAC(1,:,:,:,:),bAS(1,:,:,:,:),bAI(1,:,:,:), &
+                bM,bk1,bk2,bkk) 
+                
+            !Young's modulus 2D random field 
+                call sim2sd_init(nxe,nye,dz,dz,soilth(1),soilth(1),bvarfnc,MXM,MXK, &
+                bC0(2,:),bCT(2,:,:),bCC(2,:,:,:),bCS(2,:,:,:),bCI(2,:,:),bAT(2,:,:,:),bAC(2,:,:,:,:),bAS(2,:,:,:,:),bAI(2,:,:,:), &
+                bM,bk1,bk2,bkk) 
 
 
         !Prepare 1D random field generator, which will be used in the multi-layer hybrid mode
+        ! set SOF equal to vertical soil SOF
 
             !setup 1D random field generator; covariance matrix decomposition method
             allocate(C01D((nxe*(nxe + 1))/2))
             
-            call sim1sd_init(nzew,dz,soilth(1),bvarfnc,C01D)
+            call sim1sd_init(nzew,dz,soilth(2),bvarfnc,C01D)
             
-            !test it (seems to work)
-            call las1g( testrand, nzew ,C01D)
 
         end if
         
@@ -304,7 +317,7 @@ module variables
     end subroutine
     
             
-    
+    ! wrapper for piecewise CMD 3D random fiel generator implemented as do loops
     subroutine cmd_pw_loop(dummy)
     
     real, intent(in) :: dummy
@@ -314,7 +327,7 @@ module variables
     end subroutine
         
     
-    
+    ! wrapper for piecewise CMD 3D random fiel generator implemented as a matrix multiplication
     subroutine cmd_pw_matmul(dummy)
     
     real, intent(in) :: dummy
@@ -324,9 +337,16 @@ module variables
     
     end subroutine
     
+    ! CMD-based 1D random field generator
+    subroutine RF1D(randvals,numvals)
+    integer, intent(in) :: numvals
+    real, intent(out) :: randvals(:)
+                
+        call las1g( randvals, numvals ,C01D)
+        
+    end subroutine
     
     
-	
 
     end module
 

@@ -11,6 +11,7 @@ use getdiff
 use SETUP_SI
 use si_stats
 use output_results
+use sim2sd
 
 implicit none
 
@@ -49,7 +50,8 @@ contains
       character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
       character(200) :: soildsc !soil description string containing soil attributes, to help distinguish between different cases, particularly single layer vs multiple layers
 
-
+      real efld2D(nlayer,nxew,nyew) ! 2D random field of Young's modulus properties for each layer
+      real sdata_temp(4)    !temporary statistics for each layer
 
 ! ---- site investigation variables -----
 
@@ -242,6 +244,17 @@ contains
                 end do
             end do
         end do
+        
+        if (.not. var_props) then
+            do i = 1,nlayer !if the soil properties aren't presented by a variable random field, then set the CK properties at the deterministic value
+                CKprops(:,i,:) = lmean_ave(i)
+                if (add_errors) then
+                    efld2D(i,:,:) = lmean_ln(i)
+                else
+                    efld2D(i,:,:) = lmean_ave(i)
+                end if
+            end do
+        end if
 
     !############################# DO MONTE CARLO ANALYSIS SITE INVESTIGATIONS ###############################
 
@@ -312,11 +325,23 @@ contains
 
             !bfld(2,:,:) = transpose(bfld(2,:,:))
             
+            
+            !if Young's modulus is represented by a 2D random field in each layer, then 
+            if (var_props) then
+                do i = 1,nlayer
+                    sdata_temp(3) = lmean_ln(i)
+                    sdata_temp(4) = lsd_ln(i)
+                    ! generate logarithm of 2D random field for Young's modulus (assumes that it's lognormally-distributed)
+                    call sim2d(efld2D(i,:,:),nxe,nye,nxew,nyew,5*nye/4,dz,dz,kseed,MXM,MXK, &
+                    bC0(2,:),bCT(2,:,:),bCC(2,:,:,:),bCS(2,:,:,:),bCI(2,:,:),bAT(2,:,:,:),bAC(2,:,:,:,:),bAS(2,:,:,:,:),bAI(2,:,:,:), bM, bk1, bk2, bkk,sdata_temp,distribution)
+                end do
+            end if
+            
             !conduct site investigations
             call si_multi_stuff(nxew,nyew,nzew,lmeans(:,iter),bfld,nlayer,ninv,nbh,inv_bh,inv_coords,inv_depths,size(test_errors,1),inv_test,add_errors,use_CI,conf_int,test_errors,size(test_errors,2),kseed, &
 						plocation(goodpiles(:goodcases),:),prad,npl2,power,mindist,percentile(1),s_dev(1),size(inv_reduction),inv_reduction,invpower, &
 						evals(iter,:,:),layer_at_piles(iter,:,:,:),sdist,sumweights,extents, &
-                        node_xy_out,zd_out,element_neighbor,triangle,element_num,extranum,allones,use_avedepths,xyi,multitype,str2,plocation_dble,iter,finaloutput,soil_reps,rand_realisations,lmean_ln,lsd_ln) 
+                        node_xy_out,zd_out,element_neighbor,triangle,element_num,extranum,allones,use_avedepths,xyi,multitype,str2,plocation_dble,iter,finaloutput,soil_reps,rand_realisations,lmean_ln,lsd_ln,efld2D,C01D) 
             
             !if (iter < 4) then
             !    write(*,*) ckheight(iter,1,goodpiles(:goodcases))
@@ -335,16 +360,33 @@ contains
 			!write(*,*) iter,(finish - start) !<- Don't write the progress to screen if using the EA
         end do
     else
+
+        
         do iter = 1,nrep_MC    
 			!call cpu_time(start)
             !write(*,*) iter
 
-			!---Generate virtual soil---
+
 			kseed = randu(soilseeds(iter)) * 1234567890
             
-            call soil_layers(xyi) !get layer boundary
+            
+            !if Young's modulus is represented by a 2D random field in each layer, then 
+            if (var_props) then
+                do i = 1,nlayer
+                    sdata_temp(3) = lmean_ln(i)
+                    sdata_temp(4) = lsd_ln(i)
+                    ! generate logarithm of 2D random field for Young's modulus (assumes that it's lognormally-distributed)
+                    call sim2d(efld2D(i,:,:),nxe,nye,nxew,nyew,5*nye/4,dz,dz,kseed,MXM,MXK, &
+                    bC0(2,:),bCT(2,:,:),bCC(2,:,:,:),bCS(2,:,:,:),bCI(2,:,:),bAT(2,:,:,:),bAC(2,:,:,:,:),bAS(2,:,:,:,:),bAI(2,:,:,:), bM, bk1, bk2, bkk,sdata_temp,distribution)
+                    do j = 1,goodcases
+                        ! calculate weighted geometric average of soil properties around pile
+                        CKprops(iter,i,goodpiles(j)) = exp(sum(efld2D(i,extents(j,1,1):extents(j,1,2),extents(j,2,1):extents(j,2,2)) * sdist(j,extents(j,1,1):extents(j,1,2),extents(j,2,1):extents(j,2,2))) / sumweights(j))
+                    end do
+                end do
+            end if
             
  
+            call soil_layers(xyi) !get layer boundary
             
             !Get layer heights at each pile for true, full, original soil (later used to determine actual differential settlement)
             if(multitype == 1) then !just use the layer boundaries within the pile
@@ -367,7 +409,7 @@ contains
             call si_multi_stuff(nxew,nyew,nzew,lmeans(:,iter),bfld,nlayer,ninv,nbh,inv_bh,inv_coords,inv_depths,size(test_errors,1),inv_test,add_errors,use_CI,conf_int,test_errors,size(test_errors,2),kseed, &
 						plocation(goodpiles(:goodcases),:),prad,npl2,power,mindist,percentile(1),s_dev(1),size(inv_reduction),inv_reduction,invpower, &
 						evals(iter,:,:),layer_at_piles(iter,:,:,:),sdist,sumweights,extents, &
-                        node_xy_out,zd_out,element_neighbor,triangle,element_num,extranum,allones,use_avedepths,xyi,multitype,str2,plocation_dble,iter,finaloutput,soil_reps,rand_realisations,lmean_ln,lsd_ln) 
+                        node_xy_out,zd_out,element_neighbor,triangle,element_num,extranum,allones,use_avedepths,xyi,multitype,str2,plocation_dble,iter,finaloutput,soil_reps,rand_realisations,lmean_ln,lsd_ln,efld2D,C01D) 
 
         end do
 
@@ -434,7 +476,7 @@ contains
             
                 layer_at_piles = layer_at_piles * dz !convert layer depths to metres
                 !call cpu_time(start)
-                call multides_1D(prad,nrep_MC,ninv,goodcases,nlayer,layer_at_piles,evals,sides(:goodcases_design,:,:),rel_loads2(:goodcases),load_con2(:goodcases), settol, buildingweight,dz,nzew,plocation(goodpiles(:goodcases),:)*sngl(dz)*1000,lmeans,CKheight(:,:,goodpiles(:goodcases)),diffset,rel_loads,ave_horiz_mode,load_con(goodpiles(:goodcases)))
+                call multides_1D(prad,nrep_MC,ninv,goodcases,nlayer,layer_at_piles,evals,sides(:goodcases_design,:,:),rel_loads2(:goodcases),load_con2(:goodcases), settol, buildingweight,dz,nzew,plocation(goodpiles(:goodcases),:)*sngl(dz)*1000,lmeans,CKheight(:,:,goodpiles(:goodcases)),diffset,rel_loads,ave_horiz_mode,load_con(goodpiles(:goodcases)),CKprops(:,:,goodpiles(:goodcases)))
                                                        !multides_1D(pdepths,npdepths,prad,nrep_MC,ninv,npl,nlayer,layer_at_piles,evals,sides,rel_loads,load_con, destol, buildingweight,dz,nzew,plocation,sdata,CKheights,diffset)
                 !call cpu_time(finish)
                 !write(*,*) 'design', finish-start 
@@ -524,7 +566,7 @@ contains
             
                 !print average and standard deviation of differential settlement and pile lengths for current input
     !for predominantly debugging purposes
-    if (finaloutput == 7) then
+    if (finaloutput == 5) then
         open(505,file='diffset.txt')
         write(505,'(A)') '! rows are investigations, columns are Monte Carlo realisations'
         do i = 1,ninv
@@ -538,7 +580,7 @@ contains
              !do j = 1,invcount(i)
              !    write(505,*) diffset(goodloc(j,i),i)
              !end do
-            write(505,'(100000(E8.3,X))') diffset(:,i) 
+            write(505,'(100000(E10.4,X))') diffset(:,i) 
         end do
         close(505)
         
@@ -558,7 +600,27 @@ contains
                  !do j = 1,invcount(i)
                  !    write(505,*) avesides(goodloc(j,i),i)
                  !end do
-                write(505,'(100000(E8.3,X))') sides(j,:,i) 
+                write(505,'(100000(E10.4,X))') sides(j,:,i) 
+            end do
+            close(505)
+        end do
+        
+        do j = 1, nlayer
+            write(str2,'(A,I0,A)') 'evals_layer-',j,'.txt'
+            open(505,file=str2)
+            write(505,'(A)') '! rows are investigations, columns are Monte Carlo realisations'
+            do i = 1,ninv
+            
+                 !tempvec(:invcount(i)) = avesides(goodloc(:invcount(i),i),i)
+                 !tempmean = sum(tempvec(:invcount(i)),1)/invcount(i)
+                 !tempvec(:invcount(i)) = tempvec(:invcount(i)) - tempmean
+                 !tempsd = sum(tempvec(:invcount(i))**2)
+                 !tempsd = sqrt(tempsd/invcount(i))
+                 !write(505,*) tempmean,tempsd
+                 !do j = 1,invcount(i)
+                 !    write(505,*) avesides(goodloc(j,i),i)
+                 !end do
+                write(505,'(100000(E10.4,X))') evals(:,i,j) 
             end do
             close(505)
         end do
@@ -609,8 +671,11 @@ contains
     
     
 
-    
-    write(soildsc,'(A,I0,A,I0,A,I0,A,I0,A,I0)') '_nlayers-',nlayer,'_ratio2l-',nint(lmean_ave(1)/minval(lmean_ave(:2))),'+',nint(lmean_ave(2)/minval(lmean_ave(:2))),'_depth2l-',nint(dz*ldepths(1)),'_bSD-',nint(bsd*dz)
+    if (nlayer == 1) then
+        write(soildsc,'(A,I0,A,I0,A,I0)') '_sof-',nint(soilth(1)),'_cov-',nint(100*sdata(1,2)/sdata(1,1)),'_anis-',anisotropy
+    else
+        write(soildsc,'(A,I0,A,I0,A,I0,A,I0,A,I0)') '_nlayers-',nlayer,'_ratio2l-',nint(lmean_ave(1)/minval(lmean_ave(:2))),'+',nint(lmean_ave(2)/minval(lmean_ave(:2))),'_depth2l-',nint(dz*ldepths(1)),'_bSD-',nint(bsd*dz)
+    end if
     call save_output(soildsc,finaloutput,deterministic,goodcases,goodloc,invcount,nrep_MC,buildingarea,ninv,nbh,in_tests,in_depths,in_reductions,dz,inv_coords,inv_bh,inv_depths,inv_reduction,inv_test,swidth,soffset,sstep,testnames,rednames, &
 			EA_generation,costmetric,plocation,avesides,diffset,si_performance,costs,fcost,pcost,icost,probfail,avediff,diffgeo,diffgeo2)
     deallocate(avesides)

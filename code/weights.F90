@@ -39,7 +39,7 @@ contains
 
 !c-------------------------------------------------------------------------
 
-subroutine getweights(esize,srad,nzef,prad,npdepths,pdepths,cg_tol,cg_limit,startstress,datafolder)
+subroutine getweights(esize,srad,nzef,prad,npdepths,pdepths,cg_tol,cg_limit,startstress,datafolder,soilweight_out)
 
  use fem_stuff
  USE fem_geom
@@ -80,6 +80,7 @@ subroutine getweights(esize,srad,nzef,prad,npdepths,pdepths,cg_tol,cg_limit,star
 
  REAL(4),ALLOCATABLE :: soilweight(:)	!soil weights used for PIE method.
  real(4), allocatable :: sw(:,:,:,:) !3D array for the above data
+ real(4), allocatable, intent(out) :: soilweight_out(:,:,:,:) !copy of the above with dynamic limits
  !real(4), allocatable :: sigma_z(:,:,:,:) !3D array of vertical stress
 
  real maxstress !maximum vertical stress in field
@@ -285,6 +286,7 @@ do pd = 1,npdepths
     maxstress = maxval(sw(pd,:,:,:))
     startstress(:,pd) = 0
     
+    !find the outer bounds of the 3D array where weights are 0.01% of the maximum value.
     do xi = srad,1,-1
         startstress(1,pd) = startstress(1,pd) + 1
         if(maxval(sw(pd,xi,:,:))/maxstress < 0.0001) exit
@@ -307,17 +309,22 @@ do pd = 1,npdepths
    
     
     call cpu_time(finish)
+    !write the limits to file so the program knows what they are in subsequent runs
      write(*,'(F10.3,3X,F15.10,3X,F8.1)') pdepths(pd)*esize,detdisp(pd),finish-start
     
 
 end do
 
 
-
+    !save the soil weights to disk
     write(str2,'(A,A,I0,A,F4.2,A)') trim(datafolder),'soilweights_prad-',prad(1),'_esize-',dz,'.dat'
     open(668,file=str2,access='stream')
 	write(668) sw(:,srad-maxval(startstress(1,:))+1:srad+prad(1)+maxval(startstress(1,:)),srad-maxval(startstress(2,:))+1:srad+prad(2)+maxval(startstress(2,:)),:maxval(startstress(3,:)))
     close(668)
+    
+    !allocate the soil weight array to be used in the rest of the file and copy the data
+    allocate(soilweight_out(npdepths,maxval(startstress(1,:))*2+prad(1),maxval(startstress(2,:))*2+prad(2),maxval(startstress(3,:))))
+    soilweight_out = sw(:,srad-maxval(startstress(1,:))+1:srad+prad(1)+maxval(startstress(1,:)),srad-maxval(startstress(2,:))+1:srad+prad(2)+maxval(startstress(2,:)),:maxval(startstress(3,:)))
     
 
 

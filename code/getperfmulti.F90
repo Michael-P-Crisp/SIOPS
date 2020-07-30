@@ -7,7 +7,7 @@ module getperfmulti
     
 subroutine si_multi_stuff(nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coords,inv_depths,num_tests,inv_test,add_errors,use_CI,CI,test_errors,num_errors,kseed, &
 						plocation,pdim,npl,power,mindist,percentile,s_dev,n_reds,inv_reduction,invpower,evals,layer_at_piles,sdist,sumweights,extents, &
-                        node_xy_out,zd_out,element_neighbor,triangle,element_num,extranum,allones,use_avedepths,xyi,multitype,str2,plocation_dble,iter,finaloutput,soil_reps,rand_realisations,lmean_ln,lsd_ln)
+                        node_xy_out,zd_out,element_neighbor,triangle,element_num,extranum,allones,use_avedepths,xyi,multitype,str2,plocation_dble,iter,finaloutput,soil_reps,rand_realisations,lmean_ln,lsd_ln,efld2D,C01D)
 
 !*****************************************************************************
 ! Get SI performance (reduced young's modulus of each layer + effective layer depth for each pile)
@@ -19,6 +19,9 @@ subroutine si_multi_stuff(nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coor
   integer, intent(in) :: iter !current monte carlo realisation
   integer, intent(in) :: finaloutput !integer relating to the quantity of information to output
   integer, intent(in) :: soil_reps(2) !range of monte carlo realisations for which to output virtual soils
+  real, intent(in) :: efld2D(:,:,:)     !2D random field of soil properties representing Young's modulus
+  real, intent(in) :: C01D(:) ! correlation data for generating 1D random fields
+  !logical, intent(in) :: var_props !whether the Young's modulus properties in each layer are represented by a 2D random field
   
   !all of this is site investigation stuff 
   integer,		intent(in) :: nxe,nye,nze						!number of soil elements in x,y,z dimensions
@@ -41,7 +44,7 @@ subroutine si_multi_stuff(nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coor
   integer,      intent(in) :: kseed                             !initial random seed
   
   real, intent(in) :: lmean_ln(:),lsd_ln(:) !lognormal statistics for each layer for generating random values      <- revert; comment this out
-  logical, intent(in) :: rand_realisations !randomize true soil uniform values (true) or apply white noise to soil samples (false)
+  integer, intent(in) :: rand_realisations !how to treat stiffness randomness in multi-layer soils (see variables.F90 for description)
   
   real(8) :: inv_coords_real(2,n_bh)			!transposed, single precision equivallent of the inv_coords array for subroutine compatibility
   real :: sdist(npl,nxe,nye),sumweights(npl) !distance of elements from each pile, sum of distance weights
@@ -123,9 +126,9 @@ subroutine si_multi_stuff(nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coor
   
   !Do site investigations and collect samples from soil
   
-   if(add_errors .or. .not. rand_realisations) then !if dealing with errors, do the full site investigation proceedure
+   if(add_errors .or. rand_realisations >= 2) then !if dealing with errors, or horizontally-variable soil properties, do the full site investigation proceedure
 
-		call do_SI(goodvals,nsamples,nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coords,inv_depths,num_tests,num_errors,inv_test,add_errors,use_CI,test_errors,kseed,CI,rand_realisations,lmean_ln,lsd_ln)
+		call do_SI(goodvals,nsamples,nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coords,inv_depths,num_tests,num_errors,inv_test,add_errors,use_CI,test_errors,kseed,CI,rand_realisations,lmean_ln,lsd_ln, efld2D,C01D)
 
   
 
@@ -164,11 +167,12 @@ subroutine si_multi_stuff(nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coor
    else
   !Otherwise, the young's modulus for each layer is already known, and can be saved directly (much faster)
         
-  		do j = 1,nlayer	
-			evals(:,j) = emn(j)
-        end do
+
+  		    do j = 1,nlayer	
+			    evals(:,j) = emn(j)
+            end do
   
-  end if
+   end if
 
 
 
@@ -182,6 +186,10 @@ subroutine si_multi_stuff(nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coor
 
 	!call getbhdepths(nxe,nye,nze,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coords,inv_depths,bound_depths)
   
+   ! if 1 layer is specified, there are no boundaries to find. Exit subroutine.
+   if (nlayer == 1) then
+       return
+   end if
 
   
      if(allones) then       !If all the investigations have a single borehole (i.e. with the heatmap mode, and on other occasions), layer depth is constant. Set depth and exit subroutine.

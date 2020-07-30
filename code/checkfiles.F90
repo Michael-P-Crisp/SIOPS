@@ -115,7 +115,14 @@ module checkfiles
 	            open(667,file=str2,status='old')
                 read(667,*) 
                 do j = 1,npdepths
-	                read(667,*) startstress(:,j)
+	                read(667,*,iostat=readstatus) startstress(:,j)
+	                if(readstatus < 0) then	
+                        if(runmode == 'AL') then
+					        write(*,*) "Warning, not all pile depths have been pre-processed."
+					        write(*,*) "Generating new set of soil weights"
+					        thismode(1) = .true.
+					    end if
+					end if
                 end do
                 close(667)
     
@@ -271,8 +278,8 @@ write(unit,*) "2048,	6					!limit for stage 0 matrix size, where this value is k
 write(unit,*) "-1 1						!Lower and upper range of MC realisations to export soils for. 1st value -ve doesn't export. 2nd value -ve exits after exporting."
 write(unit,*) "!Single layer soil options"
 write(unit,*) "l						!soil distribution; n = normal, l = lognormal, b = beta"
-write(unit,*) "15.0  0.8   					!Soil stiffness: Mean and COV (as a proportion of the mean). (Single layer only)"
-write(unit,*) "30, 30						!horizontal and vertical SOF (single layer only)"
+write(unit,*) "25.0  0.8   					!Soil stiffness: Mean and COV (as a proportion of the mean). (Single layer only)"
+write(unit,*) "30.0, 30.0						!horizontal and vertical SOF (single layer only)"
 write(unit,*) "!Multiple layer analysis options"
 write(unit,*) "100						!boundary SOF"
 write(unit,*) "8						!boundary SD (elements)"
@@ -280,6 +287,7 @@ write(unit,*) "2						!number of layers"
 write(unit,*) "20,40,30,40,50,60,70				!Layer depth (elements)	(only needed for the n-1'th top layers)"
 write(unit,*) "5,50,40,4,1,10					!Young's modulus of each layer"
 write(unit,*) "1, 10						!standard deviation of Young's modulus for each layer"
+write(unit,*) "0							!SD mode. 0=no variability, 1=variability across MC realisations, 2=2D RF for variability,3=2+1D RF for boreholes."
 write(unit,*) ".false.						!ignore depths and properties of each layer, and instead read in explicit borehole depths from other file"
 write(unit,*) ".true.						!enforce fixed layer depths at boreholes despite added randomness, if the above option is set to true"
 write(unit,*) ""
@@ -362,7 +370,8 @@ write(unit,*) "200		!pile cost per metre"
     write(unit,*) "Furthermore, there should be a 'si_results' folder for results to be saved in"
     write(unit,*) "and a 'data' folder, the location of which must be given in the EA_input.txt file"
     write(unit,*) 
-    write(unit,*) "Note: There is a SIOPS manual avaiable for download."
+    write(unit,*) "Note: The software manual and latest program can be found at:"
+    write(unit,*) "https://github.com/Michael-P-Crisp/SIOPS"
     
     close(unit)
     

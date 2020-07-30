@@ -76,8 +76,8 @@ module soilgen
             do i=1,nlayer-1
 		
 				!call LAS for zero mean, normally-distributed 2D random field for random noise of layer boundary (just uses top slice atm)
-				call sim2d(bfld(i+1,:,:),nxe,nye,nxew,nyew,ceiling(real(5*nye)/4.0),dx,dy,kseed,MXM,MXK, &
-				bC0,bCT,bCC,bCS,bCI,bAT,bAC,bAS,bAI, &
+				call sim2d(bfld(i+1,:,:),nxe,nye,nxew,nyew,ceiling(real(5*nye)/4.0),dz,dz,kseed,MXM,MXK, &
+				bC0(1,:),bCT(1,:,:),bCC(1,:,:,:),bCS(1,:,:,:),bCI(1,:,:),bAT(1,:,:,:),bAC(1,:,:,:,:),bAS(1,:,:,:,:),bAI(1,:,:,:), &
 				bM,bk1,bk2,bkk,bsdata,'n') !hardcode distribution to be normal with zero mean for now
                 
                 !if(present(nrep)) then

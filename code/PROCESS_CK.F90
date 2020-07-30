@@ -5,6 +5,7 @@ use fem_prep
 use writesoils
 use variables
 use soilgen
+use sim2sd
 
 implicit none
 
@@ -109,8 +110,7 @@ subroutine get_ck_set(soilseeds & !soil generation variables
 	end do
 	close(667)
     
-    
-    write(*,*) shape(startstress), maxval(soilweight)
+
 
     if(singletrue) then
         centerpie(1) = maxval(startstress(1,:)) + 1
@@ -428,14 +428,15 @@ subroutine get_ck_set(soilseeds & !soil generation variables
 	end do
 	
 
-  end subroutine
+                      end subroutine
     
                       
                       
                       
                       
-  !Get the true depths of the CK layers at the pile boundaries.
-!Generate all layer boundaries and save into a big array
+!Get the true depths of the CK layers at the pile boundaries.
+!If specified, generate all layer boundaries and save into a big array
+!This subroutine must be called before process_si_multi since it sets up some arrays and values
 subroutine prepmultiSI(npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,preps,load_con,usepie,radius,soilseeds,prad,nrep_MC,plocation)
 
 
@@ -460,12 +461,14 @@ subroutine prepmultiSI(npl2,goodpiles,goodcases,sdist,sumweights,extents,indices
     !local variables
     integer :: i,j,iter,counter
     real :: randu
-    real, parameter ::  power=2
+    real, parameter ::  power=1.5
     real start,ender
     integer tempradius !instead of using the max pile length for the radius used for the weighted average calculation, use 5*pile diameter
     real(8) :: xyi(2,nxew*nyew)
     
      real bfldave(nxew,nyew)
+     real efld2D(nxew,nyew)
+     real sdata_temp(4)
      
     
     
@@ -474,7 +477,9 @@ subroutine prepmultiSI(npl2,goodpiles,goodcases,sdist,sumweights,extents,indices
 
 	allocate(indices(2,nxew,nyew))
     allocate(CKheight(nrep_MC,nlayer-1,preps(1)*preps(2)))
+    allocate(CKprops(nrep_MC,nlayer,preps(1)*preps(2)))
 	!allocate(goodpiles(preps(1)*preps(2)))
+
 
     
     if (usepie) then
@@ -509,7 +514,7 @@ subroutine prepmultiSI(npl2,goodpiles,goodcases,sdist,sumweights,extents,indices
 	    extents(j,2,2) = plocation(goodpiles(j),2) + tempradius + prad(2) - 1  !yhigh
 
 	    sdist(j,:,:) = sqrt((indices(1,:,:)-plocation(goodpiles(j),1)-float(prad(1))/4)**2 + (indices(2,:,:)-plocation(goodpiles(j),2)-float(prad(2))/4)**2)  !Calculate the distances of each soil element from the pile using pythagoras
-	    sdist(j,:,:) = sdist(j,:,:)**(-power) !Multiply them by an arbitrary power (negative for inverse).
+	    sdist(j,:,:) = (sdist(j,:,:)*dz)**(-power) !Multiply them by an arbitrary power (negative for inverse).
 	    sdist(j,plocation(goodpiles(j),1):plocation(goodpiles(j),1)+prad(1)-1,plocation(goodpiles(j),2):plocation(goodpiles(j),2)+prad(2)-1) = 0 !elements within the pile radius must be near-zero as they are likely replaced by the pile itself
 	    sdist(j,plocation(goodpiles(j),1):plocation(goodpiles(j),1)+prad(1)-1,plocation(goodpiles(j),2):plocation(goodpiles(j),2)+prad(2)-1) = maxval(sdist)/(10 * prad(1)*prad(2))  !Set the weighting within the pile to be 10% of the maximum outside the pile.
         sumweights(j) = sum(sdist(j,extents(j,1,1):extents(j,1,2),extents(j,2,1):extents(j,2,2))) !get the sum of the weights as part of the weighted average calculation
@@ -520,6 +525,13 @@ subroutine prepmultiSI(npl2,goodpiles,goodcases,sdist,sumweights,extents,indices
     !This also pre-processes the CK layer depths at pile locations
     if (superset) then
         allocate(fullbfld(nrep_MC,nlayer-1,nxew,nyew))
+        
+        
+        if (.not. var_props) then
+            do i = 1,nlayer !if the soil properties aren't presented by a variable random field, then set the CK properties at the deterministic value
+                CKprops(:,i,:) = lmean_ln(i)
+            end do
+        end if
         
         write(*,*) 'Pre-prcessing soil layers'
 
@@ -539,11 +551,23 @@ subroutine prepmultiSI(npl2,goodpiles,goodcases,sdist,sumweights,extents,indices
             
 			kseed = randu(soilseeds(iter)) * 1234567890
             
-
-            
-            call soil_layers(xyi)                             !get layer boundaries
+			!Emulate variable soil properties through a 2D random field (hybrid soil model approach)
+            if (var_props) then
+                do i = 1,nlayer
+                    sdata_temp(3) = lmean_ln(i)
+                    sdata_temp(4) = lsd_ln(i)
+                    ! generate logarithm of 2D random field for Young's modulus (assumes that it's lognormally-distributed)
+                    call sim2d(efld2D,nxe,nye,nxew,nyew,5*nye/4,dz,dz,kseed,MXM,MXK, &
+                    bC0(2,:),bCT(2,:,:),bCC(2,:,:,:),bCS(2,:,:,:),bCI(2,:,:),bAT(2,:,:,:),bAC(2,:,:,:,:),bAS(2,:,:,:,:),bAI(2,:,:,:), bM, bk1, bk2, bkk,sdata_temp,distribution)
+                    do j = 1,goodcases
+                        ! calculate weighted geometric average of soil properties around pile
+                        CKprops(iter,i,goodpiles(j)) = exp(sum(efld2D(extents(j,1,1):extents(j,1,2),extents(j,2,1):extents(j,2,2)) * sdist(j,extents(j,1,1):extents(j,1,2),extents(j,2,1):extents(j,2,2))) / sumweights(j))
+                    end do
+                end do
+            end if
             
             !Store the soil in memory
+            call soil_layers(xyi)                             !get layer boundaries
             fullbfld(iter,:,:,:) = bfld(2:nlayer,:,:)
             
  

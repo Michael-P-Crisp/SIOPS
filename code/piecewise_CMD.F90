@@ -219,6 +219,8 @@ module piecewise_CMD
       integer init
       integer L,i,j,x,y,z,x2 !loop counters
       real start, finish
+      
+      real(8) mean,sd !mean, standard deviation
 
 !c-------------------------------------- generate realization -----------------
       iz = 0
@@ -244,6 +246,9 @@ module piecewise_CMD
           end do
         end do
     end do
+    
+    !Progress indicator
+    write(*,'(A,X)',advance='no') '33%'
       
       !process y direction
       U = 0
@@ -257,6 +262,9 @@ module piecewise_CMD
           end do
         end do
     end do
+    
+    !Progress indicator
+    write(*,'(A,X)',advance='no') '67%'
       
       !process z direction
       
@@ -272,16 +280,27 @@ module piecewise_CMD
           end do
         end do
     end do
+    
+        !Progress indicator
+    write(*,'(A,X)') '100%'
       
      
       ! call cpu_time(finish)
       ! write(*,*) finish-start
       
-    !open(505,file='piecewise.dat',access='stream')
-    !write(505) soil
-    !close(505)
+      mean = sum(soil)/size(soil)
+      sd = sqrt(sum((soil-mean)**2)/(size(soil)-1))
+      
+      
+      soil = (soil-mean)/sd
+
 
     call transform_soil(soil,size(soil),sdata,stype)
+    
+
+    
+    
+    
       
     
     end subroutine

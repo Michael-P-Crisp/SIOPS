@@ -143,6 +143,7 @@ contains
     character(2), parameter :: rednames(6) = (/ 'SA','GA','HA','1Q','SD','MN' /) !reduction method names; hard-coded in SI module
     integer, intent(in) :: deterministic !SI mode. 1 = 'deterministic' analysis of investigation performance, 2 = 'heat map', 3 = optimise investigations with EA
     integer tempEAit !temporary EA iteration count
+    real(8) sumval
     
 	!want a higher res curve to get the inverse of the settlement function. 4 should be enough.
 	integer, parameter :: curvefactor=10
@@ -180,7 +181,6 @@ contains
             call cpu_time(s1)
             do iter = 1,nrep_MC    
                 
-                write(*,*) iter
                 		
                !generate random offsets within superset soil
                kseed = randu(soilseeds(iter)) * 1234567890 !ensure random numbers are consistent across MC realisations
@@ -398,9 +398,33 @@ contains
              !do j = 1,invcount(i)
              !    write(505,*) diffset(goodloc(j,i),i)
              !end do
-            write(505,'(100000(E8.3,X))') diffset(:,i) 
+            write(505,'(100000(E10.4,X))') diffset(:,i) 
         end do
         close(505)
+        
+        
+        open(505,file='evals.txt')
+        write(505,'(A)') '! rows are investigations, columns are Monte Carlo realisations'
+        do i = 1,ninv
+             !tempvec(:invcount(i)) = diffset(goodloc(:invcount(i),i),i)
+             !tempmean = sum(tempvec(:invcount(i)),1)/invcount(i)
+             !tempvec(:invcount(i)) = tempvec(:invcount(i)) - tempmean
+             !tempsd = sum(tempvec(:invcount(i))**2)
+             !tempsd = sqrt(tempsd/invcount(i))
+             
+             !write(505,*) tempmean,tempsd
+             !do j = 1,invcount(i)
+             !    write(505,*) diffset(goodloc(j,i),i)
+             !end do
+            sumval = 0.0
+            do j = 1,nrep_MC
+                sumval = sumval + evals(j,i)
+            end do
+            write(*,*) sumval / nrep_MC
+            write(505,'(100000(E10.4,X))') evals(:,i) 
+        end do
+        close(505)
+        read(*,*)
         
         
         do j = 1, num_loadSI
@@ -418,7 +442,7 @@ contains
                  !do j = 1,invcount(i)
                  !    write(505,*) avesides(goodloc(j,i),i)
                  !end do
-                write(505,'(100000(E8.3,X))') real(sides(:,i,load_conSI(j)))/curvefactor
+                write(505,'(100000(E10.4,X))') real(sides(:,i,load_conSI(j)))/curvefactor
             end do
             close(505)
         end do

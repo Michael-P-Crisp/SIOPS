@@ -153,6 +153,7 @@ contains
         read(inn,*) (ldepths(i),i=1,nlayer-1)
         read(inn,*) (lmean_ave(i),i=1,nlayer)
         read(inn,*) (lsd(i),i=1,nlayer)
+        read(inn,*) rand_realisations
         if(num_args >= 2) then
         	lmean_ave = lmean_ave * stiff_mult
         end if
@@ -171,7 +172,10 @@ contains
 ! 				lmean_ave(i) = getarg_real()
 ! 			end do
         end if
-        anisotropy = nint(soilth(1)/soilth(2))
+        
+        ! The soil is considered isotropic if the SOF in the horizontal and vertical directions is within a 1 mm tolerance (conservative tolerance)
+        is_isotropic = abs(soilth(1) - soilth(2)) < 0.001
+        anisotropy = nint(soilth(1)/soilth(2))	!for label purposes, round anisotropy to the nearest integer
         
         
         if(num_args >= 5) bsd = nint(getarg_real())
@@ -191,9 +195,12 @@ contains
 		nxew=xdim/dz
 		nyew=ydim/dz
 		nzew=zdim/dz
+        
+        ! determine whether each layer's Young's properties are to be represented by a 2D random field for the multi-layer case
+        var_props = any(lsd > 0)
 
 		
-		!calculate lognormal parameters 
+		!calculate lognormal parameters for single layer soil
 		if (distribution == 'l') then
 			pvr = log(1.0 + sdata(1,2) ** 2 / sdata(1,1) ** 2)
 			sdata(1,3) = log(sdata(1,1)) - 0.5 * pvr
@@ -218,7 +225,11 @@ contains
         
         
         if (singletrue) then
-            write(*,*) 'Running in Single-layer mode.'
+        	if (is_isotropic) then
+            	write(*,*) 'Running in Single-layer mode (isotropic).'
+            else
+            	write(*,*) 'Running in Single-layer mode (anisotropic).'
+            end if
         else
             write(*,*) 'Running in Multi-layer mode.'
         end if
@@ -260,7 +271,7 @@ contains
 		close(inn)
         
 
-        
+        ! If specified, read in multi-layer soil profiles from a file.
         if(uselcoords) then
             deallocate(lmean_ave,lsd)
             open(678,file='input'//slash//'layer_data.txt')
@@ -282,8 +293,18 @@ contains
             allocate(bfld(nlayer+1,nxew,nyew))
         end if
 		
-       
+        
+        ! if vertical random fields are going to be added to the multi-layer soil for the site investigation component, reduce the overall
+        ! variability by 2/3. Note that if both the 2D random fields used for stiffness values and the 1D random fields are normally distributed,
+        ! a reduction of 1/sqrt(2) would be used to achieve the original variability. This slightly lower value of 2/3 is arbitrary, but helps
+        ! to account for the higher resulting variability when two lognormal distributions are combined.
+        if (rand_realisations == 3) then
+    	   lsd = 2 * lsd / 3
+        else if (rand_realisations == 0) then! if zero is specified, force variability to zero (this probably isn't necessary, but can't hurt)
+        	lsd = 0 
+        end if 
    
+   		!conver the normal statistics into lognormal for multiple layers
         allocate(lmeans(nlayer,nrep_MC),lmean_ln(nlayer),lsd_ln(nlayer))
         do j = 1,nlayer
             pvr = log(1.0 + lsd(j) ** 2 / lmean_ave(j) ** 2)
@@ -292,12 +313,13 @@ contains
         end do
         
         
-        rand_realisations = rand_realisations .or. all(lsd <= 0) !if the standard deviations are zero, just use the mean directly
+        ! This stores the mean stiffness for each layer in each Monte Carlo realisation.
         do j = 1,nlayer
-            if(rand_realisations) then !generate lognormally-distributed values as the uniform E for each soil layer and realisation
+            if(rand_realisations == 1 .and. .not. all(lsd <= 0)) then 
+            !generate lognormally-distributed values as the uniform E for each soil layer and realisation
                 call vnorm(lmeans(j,:), nrep_MC)
                 lmeans(j,:) = exp(lmean_ln(j) + lmeans(j,:) * lsd_ln(j))
-            else
+            else  !if specified or the standard deviations are zero, just use the mean directly
                 lmeans(j,:) = lmean_ave(j)
             end if
         end do
@@ -632,7 +654,7 @@ contains
 		
 		!specify some internal things
 		allocate(bhnums(nbh),in_tests(n_test),in_depths(n_depths),in_reductions(n_red))
-		read (inn,*) (bhnums(i),i=1,nbh)		!Read in list of borehole numbers
+        read (inn,*) (bhnums(i),i=1,nbh)		!Read in list of borehole numbers
 		read (inn,*) (in_tests(i),i=1,n_test)
 		if(num_args >= numpiles + 11) in_tests(1) = getarg_real()
 		read (inn,*) (in_reductions(i),i=1,n_red)

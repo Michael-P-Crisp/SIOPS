@@ -1,50 +1,34 @@
 !c  *********************************************************************
 !c  *                                                                   *
-!c  *                            program soilgen                        *
+!c  *                            program SIOPS                          *
 !c  *                                                                   *
 !c  *********************************************************************
-!c  Single Precision Version 1.0
-!c  Written by Michael P Crisp, adapted from work by Gordon A. Fenton and 
+!c  Single Precision Version 1.2
+!c  Written by Michael P Crisp, incorporating work by Gordon A. Fenton and 
 !   D. Vaughan Griffiths
 
-!c  Latest Update: September, 2018
+!c  Latest Update: July, 2020
 !c
-!c  PURPOSE Generate multi-layer soil profiles
+!c  PURPOSE Predict site investigation performance, allowing for optimisation of investigation
+!	parameters such as the number of tests, test type, location, and interpretation.
+!	Works for multi-story buildings supported by pile foundations.
+!	The latest code and software manual can be found at: https://github.com/Michael-P-Crisp/SIOPS
 !c
-!c  DESCRIPTION: This minimalistic program uses the GAF library involving the local 
-!   average subdivision (LAS) method to generate lognormally distributed random fields
-!   representing virtual soils. See the book "Risk Assessment in Geotechnical Engineering
-!   (2008)" for details on the theory involved beyond that stated in these subroutines.
+!c  DESCRIPTION: This program is based on the Random Finite Element Method (RFEM). 
+!	See the book "Risk Assessment in Geotechnical Engineering (2008)" for details on the theory.
+!	In short, it involves the use of randomly-generated virtual soils and finite element analysis (or
+!	equivalent approximation) within a Monte Carlo framework to enable advanced statistical analysis.
+!	SIOPS can predict the performance of countless numbers of site investigations for a particular building
+!	and soil, allowing for the most optimal to be chosen, according to a wide range of metrics including
+!	total expected cost. SIOPS also incorporates a basic genetic algorithm to optimise testing locations,
+!	and the ability to produce heatmaps of suggested testing locations according to a single borehole.
+!	It can be run in a variable, single-layer mode, or a multiple layer mode with variable layer boundaries
+!	but uniform properties within each layer.
 !
-!   The program also determines pile settlement within the generated virtual soils, as well as
-!   site investigations, and piles designed from tha tsite investigation information.
-!   Note that the software must be run in "CK" mode first (only once per soil configuration!)
-!    to generate the true settlement values,then subsequently run in "SI" mode to conduct site 
-!   investigations, and compare the results to the true settlement values.
-!
-!   This program has been tested on intel fortran 12.1 under optimisation level /O1 (/O2 and above
-!   yielded some incorrect results, possibly a compiler bug for this ~6 year old compiler).
-!   It has also been tested under gfortran 6.10 with optimisation -O3 (no bugs detected - good!).
-!   Note that intel fortran seems to be faster, even with the minimal /O1 optimisation, however
-!   they were not tested on the same machine, so this could be a hardware matter.
-!
-!   WARNING: This program has defined invalid values through the generation of NaN values by division
-!   by zero, and tracked them through the non-standard (?) isnan function. While this works on both
-!   compilers, if this ever stops working in the future, the NaN functionally can be replaced by the
-!   intrinsic IEEE modules.
-
-!   Note that there are a lot of variables in this program, leading to convoluted subroutine interfaces.
-!   One option to simplify things is by using shared module variables for commonly-used variables. This 
-!   would clean up interfaces and variable declarations. However I'd advise against it - "if it ain't broke,
-!   don't fix it." Not to mention variable declarations make it easier to see what's being used.
+!	This software has been tested on intel and gfortran compilers.
 !
 !   See "Framework for the Optimisation of Site Investigations for Pile Designs in Complex Multi-Layered Soil"
-!   Crisp et al. (2018) for detailed description on the functionality of this software. (Note that multi-layer
-!   functionality has been stripped out to simplify the program, and because the required FEA to get pile
-!   settlement is not practical without a supercomputer. Instead, the PIE method is a sufficient substitute.
-!   (see process_CK.F90 for details on pile settlement).
-!   The paper "INFLUENCE OF SITE INVESTIGATION BOREHOLE PATTERN AND AREA ON PILE FOUNDATION PERFORMANCE" 
-!   Crisp et al. (2018) is also a good reference as a highly succinct document of the overall process.
+!   Crisp et al. (2018) for detailed description on the functionality of this software. 
 !
 !   In the unlikely event that this program 'crashes', one of two things will happen. Firstly, the program might
 !   stop and display an error message (hitting enter will close the program). Alternatively, the program may
@@ -52,9 +36,11 @@
 !   Note that while reasonsable steps have been taken to ensure the validity of this software, it is not guarenteed
 !   to work correctly under all circumstances, as it may contain unknown bugs. It is suggested that results should
 !   be checked to see that they are reasonable and logical given the program inputs.
+!
+!	SIOPS has been released under the MIT licence. 
 !c
 !c
-!c  REVISION HISTORY:
+!c  REVISION HISTORY (version numbers predate SIOPS release 1.0):
 !	v2: Program is now better suited to purely deterministic Monte Carlo analysis as opposed to Evolutionary algorithms
 !		Inputs are more intuitive.
 !
@@ -321,7 +307,7 @@ program main
         !The CK and SI modes both depend on the determininistic pile settlement curve generated with this subroutine.
         !Additionally, the CK settlement curves are calculated using the PIE method, and need the weights from this
         !subroutine in order to produce the weighted average soil at each pile length and the associated settlement.
-        call getweights(dz,femrad,femdepth,prad,npdepths,pdepths,cg_tol,cg_limit,startstress,datafolder)
+        call getweights(dz,femrad,femdepth,prad,npdepths,pdepths,cg_tol,cg_limit,startstress,datafolder,soilweight)
         if(runmode == 'PP') stop
     end if
     
@@ -365,7 +351,7 @@ program main
             !Get a very big soil from which to extract a subset (for superset mode)
         !Note that superset won't work properly with FEM specified for CK analysis.
 	    if (singletrue .and. superset) then
-	    	write(*,*) 'Generating soil superset'
+	    	write(*,*) 'Generating soil superset (this may take several minutes)'
             kseed = randu(soilseeds(1)) * 1234567890 !ensure random numbers are consistent across MC realisations
             call RF3D(soil_dummy_var)
             !open(3579, file='supersoil.dat', access="stream")
@@ -379,7 +365,7 @@ program main
         
         
         !save soil description to a string for use in input and output 
-        if (singletrue) then 
+        if (singletrue .or. nlayer == 1) then 
 			write(soildsc,'(A,I0,A,I0,A,I0)') '_sof-',nint(soilth(1)),'_cov-',nint(100*sdata(1,2)/sdata(1,1)),'_anis-',anisotropy
 		else
 			write(soildsc,'(A,I0,A,I0,A,I0,A,I0,A,I0)') '_nlayers-',nlayer,'_ratio2l-',nint(lmean_ave(1)/minval(lmean_ave(:2))),'+',nint(lmean_ave(2)/minval(lmean_ave(:2))),'_depth2l-',nint(dz*ldepths(1)),'_bSD-',nint(bsd*dz)
@@ -420,8 +406,8 @@ program main
                 !Get site investigation performance in multiple layer soils with uniform soil properties
                 call get_si_perf_multi(soilseeds & !soil generation variables
                           ,ninv,nbhmax,size(in_tests),size(in_depths),size(in_reductions),inv_nbh,inv_coords,inv_depths,inv_test,add_errors,use_CI,testerrors,inv_reduction,conf_int,percentile,s_dev,soffset,swidth,sstep &					!site investigation variables
-                          ,npdepths,detdisp,plocation,pdepths,ck_pset,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,finaloutput,deterministic,abstol, &
-                    femvech,femvecv,prad,datafolder,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,1,invcount,fcost, pcost, probfail, avediff, diffgeo)  !multiple layer site investigations
+                          ,npdepths,detdisp,plocation,pdepths,ck_pset,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,1,deterministic,abstol, &
+                    femvech,femvecv,prad,datafolder,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,finaloutput,invcount,fcost, pcost, probfail, avediff, diffgeo)  !multiple layer site investigations
             end if
             
             

@@ -84,7 +84,7 @@ use extrafuncs
 			call akima(detset(npdepths:1:-1), pdepths(npdepths:1:-1), siset(1,:,:,pile_con(i)), npdepths, 1, 1, 1, sisize, sides(i,:,:))
 			siset(1,:,:,pile_con(i)) = siset(1,:,:,pile_con(i)) * rel_loads(i)
 		end do
-		siset = buildingforce * siset  * rel_loads(num_loads)/ (sum_loads * settol) !return siset to original values
+		siset = buildingforce * siset / (sum_loads * settol) !return siset to original values
 
 		
 	else if (nsi == npdepths) then !interpolate individual curves	(e.g for CK piles)
@@ -220,7 +220,7 @@ use extrafuncs
 			call getdesind(detset, siset(:,:,:,pile_con(i)), npdepths, 1, 1, 1, sisize, sides(:,:,loadcases(i)))
 			siset(1,:,:,pile_con(i)) = siset(1,:,:,pile_con(i)) * rel_loads(loadcases(i))
 		end do
-		siset = buildingforce * siset  * rel_loads(num_loads)/ (sum_loads * settol) !return siset to original values
+		siset = buildingforce * siset  / (sum_loads * settol) !return siset to original values
 
 		
 	else if (nsi == npdepths) then !interpolate individual curves	(e.g for CK piles)

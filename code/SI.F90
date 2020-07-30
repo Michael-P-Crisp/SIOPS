@@ -277,6 +277,7 @@ subroutine s_inv(nxe,nye,nze,efld,n_inv,n_bh,inv_bh,inv_coords,inv_depths,num_te
         
         !apply nominated reduction method
         
+        
         call reduce_single(evals(inv),inv_reduction(inv),ctrue,goodvals,gvmask,lgoodvals,percentile(inv),s_dev(inv))
         
     end do

@@ -75,7 +75,9 @@
     !these are local variables for the esett1D subroutine. 
     !I put them here in the hope that having them constantly in RAM as opposed to reinitialising them a billion times will speed things up a bit.
       real, allocatable :: effe(:),weights(:) !variables for weighted harmonic average of base stiffness
+      real, allocatable :: thicknesses(:) !thickness of each layer according to the pile
       real thickness !thickness of current layer
+      real Gave ! average shear modulus over pile
       real, parameter :: dr = log(2.0)/3 !exponential decay rate for a half-life of 3 m.
       integer penelayer !no. layers penetrated
       real Kb, omega, mu, delta, K, prevKb,theta !variables used in the settlement method
@@ -114,42 +116,250 @@
 		    penelayer = i
 		    exit
 		end if
-	end do
+     end do
+     
+     !do base stiffness at bottom of pile
+    do n = nlayer,penelayer+1,-1      !get weights from below the layer the pile is founded in
+        weights(n) = -exp(-dr*(aveloc(n+1)-des))/dr + exp(-dr*(aveloc(n)-des))/dr !area = upper integral - lower integral
+        effe(n) = weights(n)/E(n) !weighted young's modulus for current component (inverted for harmonic average calculation)
+    end do
+    weights(penelayer) = -exp(-dr*(aveloc(n+1)-des))/dr + 1/dr !get weight from layer pile is founded in 
+    effe(penelayer) = weights(penelayer)/E(penelayer)
+    effe(1) = sum(weights(penelayer:))/sum(effe(penelayer:)) !store weighted harmonic average in first element
+            
+	Kb = ((Bp*effe(1))/(1-v**2)) !* (1+0.65*Bp/(aveloc(nlayer+1)-des)) !this (1 + 0.65...) bit accounts for rock at a certain depth
+     
 			  
 	theta = 2*pi/log(5*des*(1-v)/Bp)
 	do i = penelayer,1,-1
-		if(aveloc(i+1) - aveloc(i) <= Eps) cycle !if the current layer is a non-existant lense, skip
-		thickness  =min(des,aveloc(i+1)) - aveloc(i)
+		!if(aveloc(i+1) - aveloc(i) <= Eps) cycle !if the current layer is a non-existant lense, skip
+		thickness = min(des,aveloc(i+1)) - aveloc(i)
         !if(thickness < 1 .and. i == 1) then
         !    write(*,*)
         !end if
 		mu =sqrt((theta*G(i))/(Ep*Ap))
 
-		if(i == penelayer) then !get exponentially-decaying weights for base stiffness calculation (integral of exp(-dr*t), where dr = decay rate, t = distance below pile tip).
-            do n = nlayer,penelayer+1,-1      !get weights from below the layer the pile is founded in
-                weights(n) = -exp(-dr*(aveloc(n+1)-des))/dr + exp(-dr*(aveloc(n)-des))/dr !area = upper integral - lower integral
-                effe(n) = weights(n)/E(n) !weighted young's modulus for current component (inverted for harmonic average calculation)
-            end do
-            weights(penelayer) = -exp(-dr*(aveloc(n+1)-des))/dr + 1/dr !get weight from layer pile is founded in 
-            effe(penelayer) = weights(penelayer)/E(penelayer)
-            effe(1) = sum(weights(penelayer:))/sum(effe(penelayer:)) !store weighted harmonic average in first element
-            
-			Kb = ((Bp*effe(1))/(1-v**2)) * (1+0.65*Bp/(aveloc(nlayer+1)-des)) !this (1 + 0.65...) bit accounts for rock at a certain depth
-		else
-			Kb = prevKb
-		end if
 		omega = Kb/(Ep*Ap*mu)
 				
 		K=Ep*Ap*mu*(omega+tanh(thickness*mu))/(1+omega*tanh(thickness*mu))
-
         
-        prevKb = K
+        Kb = K !update base stiffness of next (upper) segment as the total stiffness of the current segment
 				
 	end do
 			  
 	settle = DL/K
-              
+
     end function
+
+
+        !A single instance of the settlement calculation    
+    ! This version averages the shear modulus along the pile shaft rather than assessing the pile in each layer
+    function esett1D_ave_friction(E,Bp,DL,Ep,nlayer,des,aveloc,Ap,pi,G,v,thicknesses) result(settle) !get the settlement for a particular pile depth
+
+        real, intent(in) :: pi, E(:) !E(nlayer)
+        real, intent(in) ::  G(:) !G(nlayer)
+        real, intent(in) :: Bp, Ep, Ap !pile diameter, stiffness, area
+        
+        integer, intent(in) ::  nlayer ! number of layers
+        real,intent(in) :: DL !design load
+        
+        real :: settle ! settlement of final design
+        real, intent(in) :: des
+        
+        real, intent(in) :: aveloc(:) !aveloc(nlayer+1) !location of layer boundaries in terms of depth
+        
+        real thicknesses(:)
+        
+        
+        real, intent(in) :: v !poisson's ratio
+        
+          
+        
+         do i = 1,nlayer !find out which layer the pile gets in to
+            if(des >= aveloc(i) .and. des < aveloc(i+1)) then
+                penelayer = i
+                exit
+            end if
+        end do
+                  
+        theta = 2*pi/log(5*des*(1-v)/Bp)
+
+        ! Cacluate base stiffness
+        do n = nlayer,penelayer+1,-1      !get weights from below the layer the pile is founded in
+            weights(n) = -exp(-dr*(aveloc(n+1)-des))/dr + exp(-dr*(aveloc(n)-des))/dr !area = upper integral - lower integral
+            effe(n) = weights(n)/E(n) !weighted young's modulus for current component (inverted for harmonic average calculation)
+        end do
+        weights(penelayer) = -exp(-dr*(aveloc(n+1)-des))/dr + 1/dr !get weight from layer pile is founded in 
+        effe(penelayer) = weights(penelayer)/E(penelayer)
+        effe(1) = sum(weights(penelayer:))/sum(effe(penelayer:)) !store weighted harmonic average in first element
+        
+        Kb = ((Bp*effe(1))/(1-v**2)) * (1+0.65*Bp/(aveloc(nlayer+1)-des)) !this (1 + 0.65...) bit accounts for rock at a certain depth
+        
+        !get the thickness of the pile in each layer prior to the one the pile is based in
+        thicknesses(:penelayer-1) = aveloc(2:penelayer) - aveloc(:penelayer-1)
+        thicknesses(penelayer) = min(des,aveloc(penelayer+1)) - aveloc(penelayer) ! do base layer
+
+        
+        ! take the weighted arithmetic average of the shear modulus values along the shaft
+        Gave = sum(thicknesses(:penelayer) * G(:penelayer))/des
+        !Gave = product(G(:penelayer) ** thicknesses(:penelayer))**(1/des)
+        
+
+        mu =sqrt((theta*Gave)/(Ep*Ap))
+    
+        omega = Kb/(Ep*Ap*mu)
+                    
+        K=Ep*Ap*mu*(omega+tanh(des*mu))/(1+omega*tanh(des*mu))
+
+                  
+        settle = DL/K
+                  
+    end function
+    
+    
+    
+            !A single instance of the settlement calculation    
+    ! Works on a rigid pile
+    function esett1D_rigid(E,Bp,DL,Ep,nlayer,des,aveloc,Ap,pi,G,v,thicknesses) result(settle) !get the settlement for a particular pile depth
+
+        real, intent(in) :: pi, E(:) !E(nlayer)
+        real, intent(in) ::  G(:) !G(nlayer)
+        real, intent(in) :: Bp, Ep, Ap !pile diameter, stiffness, area
+        
+        integer, intent(in) ::  nlayer ! number of layers
+        real,intent(in) :: DL !design load
+        
+        real :: settle ! settlement of final design
+        real, intent(in) :: des
+        
+        real, intent(in) :: aveloc(:) !aveloc(nlayer+1) !location of layer boundaries in terms of depth
+        
+        real thicknesses(:)
+        
+        
+        real, intent(in) :: v !poisson's ratio
+        
+          
+        
+         do i = 1,nlayer !find out which layer the pile gets in to
+            if(des >= aveloc(i) .and. des < aveloc(i+1)) then
+                penelayer = i
+                exit
+            end if
+        end do
+                  
+        
+
+        ! Cacluate base stiffness
+        do n = nlayer,penelayer+1,-1      !get weights from below the layer the pile is founded in
+            weights(n) = -exp(-dr*(aveloc(n+1)-des))/dr + exp(-dr*(aveloc(n)-des))/dr !area = upper integral - lower integral
+            effe(n) = weights(n)/G(n) !weighted young's modulus for current component (inverted for harmonic average calculation)
+        end do
+        weights(penelayer) = -exp(-dr*(aveloc(n+1)-des))/dr + 1/dr !get weight from layer pile is founded in 
+        effe(penelayer) = weights(penelayer)/G(penelayer)
+        effe(1) = sum(weights(penelayer:))/sum(effe(penelayer:)) !store weighted harmonic average in first element
+        
+        
+        !get the thickness of the pile in each layer prior to the one the pile is based in
+        thicknesses(:penelayer-1) = aveloc(2:penelayer) - aveloc(:penelayer-1)
+        thicknesses(penelayer) = min(des,aveloc(penelayer+1)) - aveloc(penelayer) ! do base layer
+
+        ! do stiffness for pile segment in bottom-most layer
+        theta = 2*pi/log(5*max(Bp,thicknesses(penelayer))*(1-v)/Bp)
+        K = G(penelayer) * Bp * ((2.0/(1-v)) * effe(1) / G(penelayer) + theta * thicknesses(penelayer) / Bp) !* (1 + 0.65 * Bp / (aveloc(nlayer+1) - des))
+
+        ! loop upwards through the layer segments, using the total stiffness of the segment immediately below as the base stiffness
+        do i = penelayer-1,1,-1
+            theta = 2*pi/log(5*max(Bp,thicknesses(i))*(1-v)/Bp)
+            K =  K + G(i) * theta * thicknesses(i)
+        end do
+
+                  
+        settle = DL/K
+                  
+    end function
+    
+    
+    
+        !Closed form 2 layer solution (doesn't appear to work properly)
+    function esett1D_2L(E,Bp,DL,Ep,nlayer,des,aveloc,Ap,pi,G,v,thicknesses) result(settle) !get the settlement for a particular pile depth
+
+        real, intent(in) :: pi, E(:) !E(nlayer)
+        real, intent(in) ::  G(:) !G(nlayer)
+        real, intent(in) :: Bp, Ep, Ap !pile diameter, stiffness, area
+        
+        integer, intent(in) ::  nlayer ! number of layers
+        real,intent(in) :: DL !design load
+        
+        real :: settle ! settlement of final design
+        real, intent(in) :: des
+        
+        real, intent(in) :: aveloc(:) !aveloc(nlayer+1) !location of layer boundaries in terms of depth
+        
+        real thicknesses(:)
+        real mu1,mu2,muave
+        
+        
+        real, intent(in) :: v !poisson's ratio
+        
+          
+        
+         do i = 1,nlayer !find out which layer the pile gets in to
+            if(des >= aveloc(i) .and. des < aveloc(i+1)) then
+                penelayer = i
+                exit
+            end if
+        end do
+                  
+        theta = 2*pi/log(5*des*(1-v)/Bp)
+
+        ! Cacluate base stiffness
+        do n = nlayer,penelayer+1,-1      !get weights from below the layer the pile is founded in
+            weights(n) = -exp(-dr*(aveloc(n+1)-des))/dr + exp(-dr*(aveloc(n)-des))/dr !area = upper integral - lower integral
+            effe(n) = weights(n)/E(n) !weighted young's modulus for current component (inverted for harmonic average calculation)
+        end do
+        weights(penelayer) = -exp(-dr*(aveloc(n+1)-des))/dr + 1/dr !get weight from layer pile is founded in 
+        effe(penelayer) = weights(penelayer)/E(penelayer)
+        effe(1) = sum(weights(penelayer:))/sum(effe(penelayer:)) !store weighted harmonic average in first element
+        
+        Kb = ((Bp*effe(1))/(1-v**2)) * (1+0.65*Bp/(aveloc(nlayer+1)-des)) !this (1 + 0.65...) bit accounts for rock at a certain depth
+        
+        !get the thickness of the pile in each layer prior to the one the pile is based in
+        thicknesses = 0
+        thicknesses(:penelayer-1) = aveloc(2:penelayer) - aveloc(:penelayer-1)
+        thicknesses(penelayer) = min(des,aveloc(penelayer+1)) - aveloc(penelayer) ! do base layer
+
+        
+        ! take the weighted arithmetic average of the shear modulus values along the shaft
+        Gave = sum(thicknesses(:penelayer) * G(:penelayer))/des
+        !Gave = product(G(:penelayer) ** thicknesses(:penelayer))**(1/des)
+        
+
+        mu1 =sqrt((theta*G(1))/(Ep*Ap))
+        mu2 =sqrt((theta*G(2))/(Ep*Ap))
+        muave = sqrt((theta*Gave)/(Ep*Ap))
+    
+        omega = Kb/(Ep*Ap*muave)
+                    
+        if (penelayer == 1) then
+            !omega = Kb/(Ep*Ap*mu1)
+            K=Ep*Ap*mu1*(omega+tanh(des*mu1))/(1+omega*tanh(des*mu1))
+        
+        else
+            !omega = Kb/(Ep*Ap*mu2)
+            !K=Ep*Ap*mu1* (mu1*tanh(thicknesses(1)*mu1) + mu1*omega*tanh(thicknesses(1)*mu1)*tanh(thicknesses(2)*mu2) + mu2*omega + mu2*tanh(thicknesses(2)*mu2) ) / &
+            !         (mu1 + mu1+omega*tanh(thicknesses(2)*mu2) + mu2*omega*tanh(thicknesses(1)*mu1) + mu2*tanh(thicknesses(1)*mu1)*tanh(thicknesses(2)*mu2))
+            K=Ep*Ap*mu1* (mu1*tanh(thicknesses(1)*mu1) + mu1*omega*tanh(thicknesses(1)*mu1)*tanh(thicknesses(2)*mu2) + mu2*omega + mu2*tanh(thicknesses(2)*mu2) ) / &
+                     (mu1 + mu1+omega*tanh(thicknesses(2)*mu2) + mu2*omega*tanh(thicknesses(1)*mu1) + mu2*tanh(thicknesses(1)*mu1)*tanh(thicknesses(2)*mu2))
+        end if
+                  
+        settle = DL/K
+                  
+    end function
+    
+    
+    
+
     
       
     !Get the pile designs from each investigation and MC realisation.
@@ -158,7 +368,7 @@
     
     !This subroutine also finds the true pile settlement in the original, actual soil, as well as differential settlement.
       
-            subroutine multides_1D(prad,nrep_MC,ninv,npl,nlayer,layer_at_piles,evals,sides,rel_loads,load_con, destol, buildingweight,dz,nzew,plocation,sdata,CKheights,diffset,rel_loads_app,allones,load_con_app)
+            subroutine multides_1D(prad,nrep_MC,ninv,npl,nlayer,layer_at_piles,evals,sides,rel_loads,load_con, destol, buildingweight,dz,nzew,plocation,sdata,CKheights,diffset,rel_loads_app,allones,load_con_app,CKprops)
         
 
             integer, intent(in) :: prad(2)			!pile width in x,y directions
@@ -185,6 +395,7 @@
             logical, intent(in) :: allones !true if all investigations have a single borehole (special case that can be highly optimised)
             
             
+            real, intent(in) :: CKprops(:,:,:) !effective young's modulus at each pile in each layer according to the CK soil
             real, intent(in) :: layer_at_piles(:,:,:,:) ! layer_at_piles(nrep_MC,ninv,nlayer-1,npl) !layer depth information
             real, intent(in) :: evals(nrep_MC,ninv,nlayer) !evals(ninv,size(inv_reduction),nlayer)
             real, intent(in) :: plocation(npl,2)
@@ -328,8 +539,6 @@
         
             do iter = 1,nrep_MC                                     !loop through realisations
                 
-                sdata_tmp = sdata(:,iter)
-                G_ck = sdata_tmp/(2*(1+v)) !convert young's modulus to shear modulus
                 
                 !write(*,*) iter
 
@@ -611,6 +820,9 @@
                     
                     !get true pile settlement for individual piles
                     do pile = 1,npl
+                        !sdata_tmp = sdata(:,iter)
+                        sdata_tmp = CKprops(iter,:,pile)
+                        G_ck = sdata_tmp/(2*(1+v)) !convert young's modulus to shear modulus
                         !aveloc = [0.0,(CKheights(iter,j,pile),j=1,nlayer-1),max(maxval(CKheights(iter,:,pile)),sngl(nzew*dz))]
                         aveloc(2:nlayer) = CKheights(iter,:,pile) 
                         DL = buildingweight*rel_loads(pile)/sum_loads
@@ -695,6 +907,14 @@
                 !open(505,file='pset_spx.dat',access='stream')
                 !write(505) truesetfull
                 !close(505)
+
+
+            ! open(unit=2821,file='trueset.txt')
+            ! do i = 1,nrep_mc
+            !     write(2821,'(10000(F5.1,X))')  truesetfull(:,i,1)
+            ! end do
+            ! close(2821)
+            ! stop
             
             deallocate(effe,weights)
             
@@ -869,20 +1089,21 @@
             
             
                 !Get settlement curves using the esett function. This is more for debugging than anything else
-            subroutine multisetcurve(prad,npl,nlayer,layer_at_piles,evals,rel_loads,load_con, destol, buildingweight,dz,nzew)
+            subroutine multisetcurve(disp,disp3,pdepths,prad,npl,nlayer,layer_at_piles,evals,rel_loads,load_con, destol, buildingweight,dz,nzew)
             
             implicit none
         
             
-            integer, parameter :: curveres = 1000!number of points on ththe settlement curve
-            real :: pdepths(curveres),disp(curveres) !pile lengths and associated displacements
+            integer, parameter :: curveres = 100!number of points on ththe settlement curve
+            real :: pdepths(:),disp(:),disp3(:) !pile lengths and associated displacements
+            real :: disp2(size(disp))
 
             integer, intent(in) :: prad(2)			!pile width in x,y directions
             integer, intent(in) :: nlayer
             integer counter,pile,iter,inv,pd,p2                   !loop counters
     
             integer,intent(in) ::     npl
-            real, intent(in) :: rel_loads(:)		!srelative pile loads based on tributary area of building
+            real, intent(in) :: rel_loads(:)		!srelative dpile loads based on tributary area of building
             real :: rel_loads_temp(npl) !temporary applied loads
             integer :: load_con_temp(npl)
 	        integer, intent(in) :: load_con(:)			!connectivity vector saying which pile has which load
@@ -911,8 +1132,9 @@
             !real testsets(300)
             
             integer(8) allstart,allfinish
+            real start, finish
             
-            real left2,right2,oldleft,oldright,hardright
+            
             integer counter2
             integer side
             real value
@@ -935,13 +1157,14 @@
             do i = 1,20 !setting it directly doesn't seem to work for some reason
                 Ep = Ep * 10
             end do
+            Ep = 30000
             v=0.3
             desres = 0.1
             Eps = epsilon(v)*1000 !this tolerance is less than a milimeter, but should be enough for the finite/imperfect math
             sameloads = all(rel_loads == rel_loads(1)) !check whether all piles have the same load
             
             !allocate local variables in the settlement subroutine
-            allocate(effe(nlayer),weights(nlayer))
+            allocate(effe(nlayer),weights(nlayer),thicknesses(nlayer))
       
             
             
@@ -954,18 +1177,8 @@
             end do
 
             
-            !Check if it's in the outer bounds
-            oldleft = Bp             !pdepths(1)*dz        !This method doesn't seem to be valid for pile lengths shorter than its diameter, so set diameter as the lower bound.
-            !Set the upper bound at bedrock depth minus a very, very small amount. Otherwise there will be a divide-by-zero in the esett subroutine if the pile is founded exactly on bedrock.
-            hardright = nzew*sngl(dz)*(1-epsilon(nan)*10) !pdepths(npdepths)*dz       !use bedrock as upper bound instead of the longest pile
-  
-            oldright = hardright
             aveloc = [0.0,(sum(layer_at_piles(j,:))/size(layer_at_piles(j,:)),j=1,nlayer-1),sngl(nzew*dz)] 
             
-            do pd = 1,curveres
-                pdepths(pd) = (pd-1)*(oldright-oldleft)/curveres + oldleft
-            end do
-
         
                 
                     do pile = 1,1 !npl                                !loop through piles  (first pile for now)
@@ -981,20 +1194,16 @@
                         G = evals/(2*(1+v)) !convert young's modulus to shear modulus
 
 
-                    ! ---- perform bisection method to design pile ------
+		                    do pd = 1,size(pdepths)
 
-                            open(292,file='pile_multisets.txt')
-		                    do pd = 1,curveres
-
-                                   !call prep_fem2d(efld2d,0.3,femvech,femvecv,prad(1),cdisp,mid,dz)
                                    disp(pd) = esett1D(evals,Bp,DL,Ep,nlayer,pdepths(pd),aveloc,Ap,pi,G,v)
-                                   write(292,*)  pdepths(pd),disp(pd)
-	                     
+                                   !disp(pd) = esett1D_ave_friction(evals,Bp,DL,Ep,nlayer,pdepths(pd),aveloc,Ap,pi,G,v,thicknesses)
+                                   disp3(pd) = esett1D_rigid(evals,Bp,DL,Ep,nlayer,pdepths(pd),aveloc,Ap,pi,G,v,thicknesses)
+                                   !disp(pd) = esett1D_2L(evals,Bp,DL,Ep,nlayer,pdepths(pd),aveloc,Ap,pi,G,v,thicknesses)
+
                             end do
-                            close(292)
-
-
                     end do
+   
   
             deallocate(effe,weights)
             

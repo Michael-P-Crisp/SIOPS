@@ -58,13 +58,14 @@ implicit none
         real eval(1,1,1,1) !reduced effective Young's modulus
         character(1000) :: str2
         logical exists 
-        real efld2d(femrad,nzew) !soil field for the 2D FEA mesh
-        real :: femvech(femrad), femvecv(nzew)
+        real efld2d(femrad*3,nzew) !soil field for the 2D FEA mesh
+        real :: femvech(femrad*3), femvecv(nzew)
         real :: dist((preps(1)*preps(2))**2) !distances between piles
         real :: settol
         real :: realsides(5,maxval(load_con))
         integer :: load_conSI(num_loads)
         real(8) :: bsdtemp
+        real, allocatable :: pdepths_multi(:), detdisp_multi(:), detdisp_multi2(:), detdisp_multi3(:)
         
         !--multi layer stuff--
 
@@ -131,6 +132,7 @@ implicit none
 	            end do
 	            close(667)
             else
+                ! otherwise approximate it with quick 2D axisymmetric case
                 efld2d = 1
                 femvech = dz
                 femvecv = dz
@@ -244,17 +246,44 @@ implicit none
                 end do
             end do
             
-            write(*,*) lmean_ave
             
             !design piles
             if(singletrue) then !acccount for scaled building weight for single layer mode
-                call multides_1D_det(prad,goodcases,nlayer,lap,lmean_ave,multisides,rel_loads2(:goodcases),load_con2(:goodcases), settol, buildingweight*emean,dz,nzew)
+                call multides_1D_det(prad,goodcases,nlayer,lap,lmean_ave,multisides,rel_loads2(:goodcases),load_con2(:goodcases), settol, buildingweight*emean,dz,nzew) 
             else
-                call multides_1D_det(prad,goodcases,nlayer,lap,lmean_ave,multisides,rel_loads2(:goodcases),load_con2(:goodcases), settol, buildingweight,dz,nzew)
-                call multisetcurve(prad,goodcases,nlayer,lap,lmean_ave,rel_loads2(:goodcases),load_con2(:goodcases), settol, buildingweight,dz,nzew)
+                call multides_1D_det(prad,goodcases,nlayer,lap,lmean_ave,multisides,rel_loads2(:goodcases),load_con2(:goodcases), settol, buildingweight,dz,nzew) ! get designs
+                
+                
+                ! This block of code produces an output file that compares a few sets of pile settlement curves according to different models
+                if (.false.) then
+                
+					allocate( pdepths_multi((nzew - 1 - ceiling(dz*(prad(1)+prad(2))/2))/nint(1/dz)) )
+					allocate( detdisp_multi(size(pdepths_multi)), detdisp_multi2(size(pdepths_multi)) , detdisp_multi3(size(pdepths_multi)) )
+					pdepths_multi = [(nint(i*dz),i=ceiling(dz*(prad(1)+prad(2))/2),nzew-2,nint(1/dz))]
+				
+					! get full settlement curve as per the approximate algorithm
+					call multisetcurve(detdisp_multi,detdisp_multi3,pdepths_multi,prad,goodcases,nlayer,lap,lmean_ave,rel_loads2(:goodcases),load_con2(:goodcases), settol, buildingweight,dz,nzew)    
+				
+					! get settlement curve according to 2D axisymmetric FEM 
+					call fem_curve_2D(efld2d,0.3,lmean_ave,femvech,femvecv,pdepths_multi,detdisp_multi2,prad,load_con2(:goodcases),rel_loads2(:goodcases), lap, goodcases, buildingweight)
+				
+					open(292,file='pile_multisets.txt')
+					write(292,'(A7,X,A10,X,A10,X,A10)') 'p.depth','M&G_approx','rgd_approx','2D_FEM'
+					do i = 1,size(pdepths_multi)
+						write(292,'(F7.2,X,G10.4,X,G10.4,X,G10.4)')  pdepths_multi(i),detdisp_multi(i),detdisp_multi3(i) ,detdisp_multi2(i) 
+					end do
+					close(292)
+                
+                end if
+                
+                
             end if
             
             !output results
+            
+
+            
+            
             write(2547,'(A15,10000(X,F6.3))') 'Pile load case:',rel_loads2(:goodcases)
             
             
@@ -277,7 +306,75 @@ implicit none
             
             
     
-    end subroutine
+       end subroutine
+       
+       
+       
+       subroutine fem_curve_2D(efld2d,vval,lmean_ave,femvech,femvecv,pdepths_multi,detdisp_multi,prad,load_con,rel_loads, lap, npl, buildingweight)
+       ! produce a settlement curve with pile length using 2D axi-symmetric linear elastic FEA
+       
+       real, intent(in) :: lmean_ave(:), pdepths_multi(:), rel_loads(:), lap(:,:), buildingweight, vval
+       real, intent(out) :: detdisp_multi(:)
+       real efld2d(:,:), femvech(:), femvecv(:)
+       integer, intent(in) :: prad(2), load_con(:), npl
+       
+       real sum_loads, DL, Ep
+       integer pile,i
+       
+       logical, parameter :: rigid_pile = .true. ! false doesn't work for some reason
+       
+            !get sum of pile loads
+	        sum_loads = 0.0
+	        do pile = 1,npl
+                if(load_con(pile) == 0) cycle  !skip piles with no associated load
+		        sum_loads = sum_loads + rel_loads(load_con(pile))
+            end do
+
+            ! set mesh element sizes in horizontal and vertical directions
+            femvech = dz
+            femvecv = dz
+            
+            write(*,*) shape(femvecv), shape(femvech), shape(efld2d)
+            
+            !pile stiffness
+            Ep = 1
+            do i = 1,20 !setting it directly doesn't seem to work for some reason
+                Ep = Ep * 10
+            end do
+            
+                
+            do pile = 1,1 !npl                                !loop through piles  (first pile for now)
+                        
+                ! get the applied load
+                DL = buildingweight*rel_loads(pile)/sum_loads
+       
+                ! build soil model, working forward in time and layers
+                efld2d = lmean_ave(nlayer)
+                do i = nlayer-1,1,-1
+                    efld2d(:,:nint(lap(i,pile)/dz)) = lmean_ave(i)
+                end do
+
+                if (rigid_pile) then
+                    do i = 1,size(pdepths_multi)
+                        write(*,*) i
+                        ! get full settlement curve as per 2D fem (theoreticaly accurate)
+                        call prep_fem2d(efld2d,vval,femvech,femvecv,(prad(1)+prad(2))/2,detdisp_multi(i),nint(pdepths_multi(i)/dz),dz)                                                           
+                    end do
+                else
+                    do i = 1,size(pdepths_multi)
+                        efld2d(:(prad(1)+prad(2))/2,:nint(pdepths_multi(i)/dz)) = Ep ! if pile is not rigid, replace soil elements with stiff elastic modulus representing concrete
+                        ! get full settlement curve as per 2D fem (theoreticaly accurate)
+                        call prep_fem2d(efld2d,vval,femvech,femvecv,(prad(1)+prad(2))/2,detdisp_multi(i),0,dz)     
+                        
+                    end do
+                end if
+                
+                
+                detdisp_multi = detdisp_multi * DL
+                
+            end do
+                
+        end subroutine
     
     
 end module

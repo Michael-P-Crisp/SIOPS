@@ -25,7 +25,7 @@
     real(8) :: bee(nst,ndof),dee(nst,nst),coord(nod,ndim),fun(nod),jac(ndim,ndim),der(ndim,nod),eld(ndof),gc(ndim),deriv(ndim,nod)
     real(8), intent(out) :: sigma(nst,nels), strain(nst,nels)
     real(4), intent(in) :: disp(0:neq)
-    CHARACTER(LEN=15) ::type_2d
+    CHARACTER(LEN=15), intent(in) ::type_2d
 	CHARACTER(LEN=100) element
     integer i,iel
     

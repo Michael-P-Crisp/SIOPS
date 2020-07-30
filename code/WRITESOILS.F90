@@ -220,6 +220,8 @@ subroutine exportsoil(soilseeds,nrep_MC,datafolder)
       real(4) :: sdata_ck(4) !CK soil parameters, same as SI but with unit mean stiffness
       integer b,l,counter
       real(8), allocatable :: xyi(:,:)
+      real efld2D(nlayer,nxew,nyew) !Young's modulus in each layer as a 2D random field
+      real sdata_temp(4)
 
       real(4) :: pvr !lognormal variable
 
@@ -259,28 +261,41 @@ subroutine exportsoil(soilseeds,nrep_MC,datafolder)
 		           ypos=NINT(randu(0)*(nye-nyew))
 		           zpos=NINT(randu(0)*(nze-nzew))
                    
-                   call savetofile(efld(xpos+1:xpos+nxew,ypos+1:ypos+nyew,zpos+1:zpos+nzew),str2,i)
+                   call savetofile_binary(efld(xpos+1:xpos+nxew,ypos+1:ypos+nyew,zpos+1:zpos+nzew),str2,i)
                 else !otherwise generate individual soils
                    call RF3D(soil_dummy_var)       !call single layer soil
                    efld = efld * emean
                    call savetofile(efld,str2,i)
                 end if
             else !save multiple layer soils, both the 3D one (need to construct manually) and boundary layers
-                call soil_layers(xyi)
-                efld = lmeans(nlayer,i)                     !Fill with oldest, deepest soil
-                do n=nlayer-1,1,-1  !Progressively work forwards through time, adding newer layer
+                !Young's modulus in each layer optionally represented by a 2D random field if standard deviation is greater than zero. Generate fields.
+                do n = 1,nlayer
+                    sdata_temp(3) = lmean_ln(n)
+                    sdata_temp(4) = lsd_ln(n)
+                    ! generate logarithm of 2D random field for Young's modulus (assumes that it's lognormally-distributed)
+                    call sim2d(efld2D(n,:,:),nxe,nye,nxew,nyew,5*nye/4,dz,dz,kseed,MXM,MXK, &
+                    bC0(2,:),bCT(2,:,:),bCC(2,:,:,:),bCS(2,:,:,:),bCI(2,:,:),bAT(2,:,:,:),bAC(2,:,:,:,:),bAS(2,:,:,:,:),bAI(2,:,:,:), bM, bk1, bk2, bkk,sdata_temp,distribution)
+                end do
+
+                call soil_layers(xyi)   !get soil layer boundaries
+                do n=nlayer,1,-1  !Progressively work forwards through time, adding newer layer
                     write(str2,'(A,I0,A,I0,A)') 'bound',i,'_layer',n,'.txt'
 	                open(200,file=str2)
                     do y=1,nyew !fill in y direction
                         do x=1,nxew     !fill in x direction
-                            efld(x,y,:nint(bfld(n+1,x,y))) = lmeans(n,i)                              
+                            if (.false.) then
+                                efld(x,y,:nint(bfld(n+1,x,y))) = exp(efld2D(n,x,y))      
+                            else
+                                call las1g( efld(x,y,:nint(bfld(n+1,x,y))), nint(bfld(n+1,x,y)), C01D) !generate zero-mean, unit variance random noise
+                                efld(x,y,:nint(bfld(n+1,x,y))) = exp(efld2D(n,x,y) + efld(x,y,:nint(bfld(n+1,x,y))) * lsd_ln(n))
+                            end if
                         end do
-                        write(200,'(1000000000I4)') nint(bfld(n+1,:,y)) !output current row to file
+                        if (n < nlayer) write(200,'(1000000000I4)') nint(bfld(n+1,:,y)) !output current row to file
                     end do
                     close(200)
                 end do
                 
-                call savetofile(efld,str2,i)
+                call savetofile_binary(efld,str2,i)
                 
             end if 
 					 
@@ -327,6 +342,29 @@ integer x,y,z
             end do
         end do 
     end do
+            
+	close(200)
+
+
+end subroutine
+
+
+subroutine savetofile_binary(efld,str2,i)
+!save a single realisation of the 3D soil to file in a binary format (faster and much less storage space required)
+
+implicit none
+
+real, intent(in) :: efld(:,:,:)
+integer, intent(in) :: i    !realisation
+character(1000) :: str2
+
+
+	!Save the file in a long row of fixed-width values. X is varying first, then Y, then Z the slowest.
+	write(str2,'(A,I0,A)') 'soil',i,'.dat'
+	open(200,file=str2,access='stream')
+	!write(200,'(1000000000(E14.7,A))') ((((efld(x,y,z),' '),x=1,nxew),y=1,nyew),z=1,nzew)
+
+    write(200) efld
             
 	close(200)
 

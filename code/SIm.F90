@@ -1,11 +1,12 @@
 
 
-    !multiple layer implementation of site investigations. Needs both the virtual soil and an array of boundary information.
+    !multiple layer implementation of site investigations. Needs both the layer's Young's modulus and an array of boundary information.
     
-subroutine do_SI(goodvals,nsamples,nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coords,inv_depths,num_tests,num_errors,inv_test,add_errors,use_CI,test_errors,kseed,CI,rand_realisation,lmean_ln,lsd_ln)
+subroutine do_SI(goodvals,nsamples,nxe,nye,nze,emn,bfld,nlayer,n_inv,n_bh,inv_bh,inv_coords,inv_depths,num_tests,num_errors,inv_test,add_errors,use_CI,test_errors,kseed,CI,rand_realisation,lmean_ln,lsd_ln,efld2D,C01D)
                                                !^revert to efld
 
 use si
+use LAS1D
 
 ! This subroutine does site investigations of a 3D soil field.
 ! Options include adding test errors (bias, random, transformation) (zero and negative values are discarded)
@@ -79,8 +80,10 @@ use si
   real, 		intent(in) :: test_errors(num_tests,num_errors)	!matrix of test error stats (num tests x num errors)
   integer,      intent(in) :: kseed                             !initial random seed
   
+  real, intent(in) :: efld2D(nlayer,nxe,nye)     !2D random field of soil properties representing Young's modulus
+  real, intent(in) :: C01D(nze) ! correlation data for generating 1D random fields
   real, intent(in) :: lmean_ln(nlayer),lsd_ln(nlayer) !lognormal statistics for each layer for generating random values      <- revert; comment this out
-  logical, intent(in) :: rand_realisation !randomize true soil uniform values (true) or apply white noise to soil samples (false)
+  integer, intent(in) :: rand_realisation ! 3 = generate 1D random field for each borehole.  
 
 ! -- output variables --
   real,			intent(out) :: goodvals(n_inv,nlayer,n_bh,nze)                   !store valid values of SI samples in 1D array
@@ -177,17 +180,22 @@ use si
     	!write(*,*) 'h2'
         
         
-        !Approximately simulate a variable soil as a white noise field, if specified
-        if(rand_realisation) then !revert : comment this if block out if reverting to full soil
+        ! Get sample values
+        if (rand_realisation <= 2) then ! Take from layer mean
             do layer = 1,nlayer
                 sidata_rand(layer,:,:) = emn(layer)
             end do
-        else
+        else if (rand_realisation == 3) then ! Take constant value from 2D random field
             do layer = 1,nlayer
                 do bh = 1,inv_bh(inv)
-                    !Ideally this should be replaced with an efficient 1D random field generator, as white noise doesn't have much impact on results
-                    call vnorm_module( sidata_rand(layer,bh,:scount(bh)), scount(bh)) !generate zero-mean, unit variance random noise
-                    sidata_rand(layer,bh,:scount(bh)) = exp(lmean_ln(layer) + sidata_rand(layer,bh,:scount(bh)) * lsd_ln(layer))
+                    sidata_rand(layer,bh,:scount(bh)) = exp(efld2D(layer,inv_coords(inv,bh,1),inv_coords(inv,bh,2)))
+                end do
+            end do
+        else		! Take from 2D random field as above, but add a 1D random field
+            do layer = 1,nlayer
+                do bh = 1,inv_bh(inv)
+                    call las1g( rand_vals_small(:inv_depths(bh,inv,2)), inv_depths(bh,inv,2), C01D) !generate zero-mean, unit variance random noise
+                    sidata_rand(layer,bh,:scount(bh)) = exp(efld2D(layer,inv_coords(inv,bh,1),inv_coords(inv,bh,2)) + rand_vals_small(depths(:scount(bh),bh)) * lsd_ln(layer))
                 end do
             end do
         end if

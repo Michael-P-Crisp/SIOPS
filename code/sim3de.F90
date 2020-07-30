@@ -296,11 +296,15 @@ module sim3de
 		
 		
 		efldgd = efld(xpos:xpos+nxew-1,ypos:ypos+nyew-1,zpos:zpos+nzew-1)
+		
+		
         
 						
 !----------- scale subset to be exactly zero mean and unit variance -------
             mean = sum(efldgd)/size(efldgd)
             sd = sqrt(sum((efldgd-mean)**2)/(size(efldgd)-1))
+            
+            efldgd = (efldgd-mean)/sd
 
            call transform_soil(efldgd,size(efldgd),sdata,stype)
 
@@ -397,15 +401,18 @@ subroutine sim3d_nosubset(efld,nxe,nye,nze,zroom,nxew,nyew,nzew,dx,dy,dz,kseed,M
       
             mean = sum(efld(:,:,:nze))/size(efld(:,:,:nze))
             sd = sqrt(sum((efld(:,:,:nze)-mean)**2)/(size(efld(:,:,:nze))-1))
-            
-
  
             efld(:,:,:nze) = (efld(:,:,:nze)-mean)/sd
             
+
      
 
          
-            call transform_soil(efld,nxe*nye*nze,sdata,stype)
+            call transform_soil(efld(:,:,:nze),nxe*nye*nze,sdata,stype)
+            
+                !open(505,file='soil.dat',access='stream')
+				!write(505) efld(:,:,:nze)
+				!close(505)
             
       
 
