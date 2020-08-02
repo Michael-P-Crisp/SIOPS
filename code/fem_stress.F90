@@ -5,6 +5,9 @@
 ! 2D axisymmetric stress: 	sig_r       sig_z       tau_rz      sig_t
 ! 2D plane stress: 			sig_x       sig_y       tau_xy"
 
+module fem_stress
+
+contains
 
     subroutine get_stress(evals,vvals,disp,g_coord,g_g,g_num,neq,nels,nod,ndof,ndim,nst,nn,type_2d,element,sigma, strain)
     
@@ -26,7 +29,7 @@
     real(8), intent(out) :: sigma(nst,nels), strain(nst,nels)
     real(4), intent(in) :: disp(0:neq)
     CHARACTER(LEN=15), intent(in) ::type_2d
-	CHARACTER(LEN=100) element
+	CHARACTER(LEN=20) element
     integer i,iel
     
     !type_2d='axisymmetric'
@@ -59,4 +62,6 @@
     
     
     end subroutine
+    
+end module
     
