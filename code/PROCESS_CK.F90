@@ -545,7 +545,7 @@
             end do
         end if
 
-            write(*,*) 'Pre-prcessing soil layers'
+            write(*,*) 'Pre-processing soil layers'
 
             !call cpu_time(start)
 
