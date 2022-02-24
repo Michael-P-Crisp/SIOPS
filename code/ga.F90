@@ -12,7 +12,7 @@ use variables
 subroutine my_cga(soilseeds, & !soil generation variables
                       ninv,nbh,inv_bh,inv_depths,inv_test,add_errors,use_CI,test_errors,inv_reduction,conf_int,percentile,s_dev,inv_coords,mininv_coords,mincost &					!site investigation variables
                       ,npdepths,detdisp,plocation,pdepths,ck_set,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,abstol &
-    ,maxit,deterministic,max_same,popsize,tol,mutrate_init,selection,finaloutput,npar,lo,hi,mut_lims,imut,datafolder,inv_no,num_elite,stopmode,iga,propbadmc,fulltime, & !EA variables
+    ,maxit,deterministic,max_same,popsize,tol,mutrate_init,selection,finaloutput,npar,lo,hi,mut_lims,imut,inv_no,num_elite,stopmode,iga,propbadmc,fulltime, & !EA variables
     femvech,femvecv,prad,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,sstep,opt_stats) !multiple layer site investigations
 ! Main genetic algorithm program for Haupt and Haupt
 ! 2003 - uses High Performance Fortran
@@ -92,7 +92,6 @@ subroutine my_cga(soilseeds, & !soil generation variables
   real cr !timing variables
   integer allfinish,allstart,start,finish !timing variables
   integer parsum !sum of differences in parameters between any two population sizes
-  character(1000), intent(in) :: datafolder !directory of data information
   character(1000) str2
   integer samevals !variable to ensure there are no identical population members
 
@@ -303,12 +302,12 @@ subroutine my_cga(soilseeds, & !soil generation variables
         call get_si_perf(soilseeds, & !soil generation variables
                           ninv,nbh,1,1,1,inv_bh,inv_coords,inv_depths,inv_test,add_errors,use_CI,test_errors,inv_reduction,conf_int,percentile,s_dev,soffset,swidth,sstep  &					!site investigation variables
                           ,npdepths,detdisp,plocation,pdepths,ck_set,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,cost,pilecost,testcost,testnames,costmetric,inv_no, &
-                          deterministic,finaloutput,abstol,datafolder,invcount,goodpiles,goodcases,fcost, pcost, probfail, avediff, diffgeo)
+                          deterministic,finaloutput,abstol,invcount,goodpiles,goodcases,fcost, pcost, probfail, avediff, diffgeo)
     else
         call get_si_perf_multi(soilseeds, & !soil generation variables
                     ninv,nbh,1,1,1,inv_bh,inv_coords,inv_depths,inv_test,add_errors,use_CI,test_errors,inv_reduction,conf_int,percentile,s_dev,soffset,swidth,sstep  &					!site investigation variables
                     ,npdepths,detdisp,plocation,pdepths,ck_set,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,cost,pilecost,testcost,testnames,costmetric,inv_no, &
-                    deterministic,abstol,femvech,femvecv,prad,datafolder,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,finaloutput,invcount,fcost, pcost, probfail, avediff, diffgeo)
+                    deterministic,abstol,femvech,femvecv,prad,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,finaloutput,invcount,fcost, pcost, probfail, avediff, diffgeo)
                                 
         
     end if

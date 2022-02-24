@@ -9,11 +9,10 @@ module checkfiles
     !check to see that the neccessary data has been previously generated. If it hasn't, then automatically generate what's missing.
     !This subroutine also reads in the soil weights
 
-	subroutine checkdata(runmode,datafolder,npdepths,npl,nrep_MC,thismode,startstress,prad,soilweight)
+	subroutine checkdata(runmode,npdepths,npl,nrep_MC,thismode,startstress,prad,soilweight)
 	
 	!input variables
 	integer, intent(in) :: npdepths,npl,nrep_MC !number of pile depths, piles and monte carlo realisations
-	character(1000), intent(in) :: datafolder !location of data directory
 	character(2), intent(in) :: runmode
     real, allocatable, intent(out) :: soilweight(:,:,:,:)
     integer, intent(in) :: prad(2)

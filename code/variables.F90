@@ -22,6 +22,8 @@ module variables
         
         !same as above, but for the 1D CMD random field generator
 		real, allocatable :: C01D(:)
+
+        character(1000) :: datafolder !location of where data is stored
         
         !same as above, but for the piecewise 3D CMD random field generator
         real(4), allocatable :: R0x(:), R0y(:), R0z(:)
@@ -40,10 +42,14 @@ module variables
         
         character(2), parameter :: rednames(6) = (/ 'SA','GA','HA','1Q','SD','MN' /) !reduction method names; hard-coded in SI module
         
-        !whether to generate a very large soil in RAM, and take random subsets, as opposed to generating multiple independant soils
+        ! 1. Generate small soils on the fly for each Monte Carlo realisation.
+        ! 2. generate a very large soil in RAM, and take random subsets, as opposed to generating multiple independant soils
         !This will also pre-process and store the layer boundaries in RAM, and pre-process the CK layer depths at piles.
-            !There is no performance penalty for setting this to false in the multi-layer mode unless using the genetic algorithm.
-        logical :: superset   
+        ! 3. Same as 2, but save the soils to the hard drive if it isn't already saved, and attempt to load it in if present.
+            ! Note that mode 3 is considered advanced usage and does not perform safety checks, for example whether the saved
+            ! soil has changed in size. Therefore if you change any soil inputs, you should delete the saved soil manually and let it regenerate.
+        !There is no performance penalty for setting this to 1 in the multi-layer mode unless using the genetic algorithm.
+        integer :: superset   
         
 
         real, allocatable :: lmeans(:,:),ldepths(:) !mean and average boundary of each layer
@@ -89,6 +95,7 @@ module variables
         real(8), allocatable :: bhxymulti(:,:)                  !Coordinates of the above boreholes
         real(8), allocatable :: bhdepthsmulti(:,:)         !layer information from the above boreholes
         
+        logical pile_foundation ! true if using a pile foundation, false if pad footings 
         
         
         
@@ -198,26 +205,33 @@ module variables
                 C0(:),CC(:,:,:),CE(:,:,:),CS(:,:,:),CI(:,:),AC(:,:,:,:),AE(:,:,:,:),AS(:,:,:,:),AI(:,:,:), &
                 ATC(:,:,:), ATS(:,:,:), ATI(:,:),CTC(:,:),CTS(:,:),CTI(:),M,k1, k2, k3, kk)
 
-                if(superset) then
-                    RF3D => sim3dw_nosubset ! don't take a random subset, as this is done later
-                else
+                if(superset == 1) then
                     RF3D => sim3dw  ! return a field of the exact working size
+                else if (superset == 2) then
+                    RF3D => sim3dw_nosubset ! don't take a random subset, as this is done later
+                else if (superset == 3) then
+                    RF3D => sim3dw_saveload
                 end if
 
             
             else ! do anisotropic soils
                 !use the piecewise covariance matrix decomposition method
                 
-                if(superset) then !If storing a single big soil in memory...
-                    allocate(R0x(nxe*nxe), R0y(nye*nye), R0z(nze*nze))  ! allocate a larger soil
-                    RF3D => cmd_pw_loop     ! this loop implementation is typically faster for large soils, so use it here
-                    ! get correlation arrays
-                    call piecewise_init(nxe,nye,nze,dz,soilth(1),soilth(2),bvarfnc,R0x,R0y,R0z)
-                else
+                if (superset == 1) then
                     allocate(R0x(nxew*nxew), R0y(nyew*nyew), R0z(nzew*nzew))
                     RF3D => cmd_pw_matmul   
                     ! get correlation arrays
                     call piecewise_init(nxew,nyew,nzew,dz,soilth(1),soilth(2),bvarfnc,R0x,R0y,R0z)
+
+                else if(superset == 2) then !If storing a single big soil in memory...
+                    allocate(R0x(nxe*nxe), R0y(nye*nye), R0z(nze*nze))  ! allocate a larger soil
+                    RF3D => cmd_pw_loop     ! this loop implementation is typically faster for large soils, so use it here
+                    ! get correlation arrays
+                    call piecewise_init(nxe,nye,nze,dz,soilth(1),soilth(2),bvarfnc,R0x,R0y,R0z)
+                else if(superset == 3) then 
+                    allocate(R0x(nxe*nxe), R0y(nye*nye), R0z(nze*nze))  ! allocate a larger soil
+                    RF3D => piecewise_saveload
+                    call piecewise_init(nxe,nye,nze,dz,soilth(1),soilth(2),bvarfnc,R0x,R0y,R0z)
                 end if
 
             end if
@@ -286,7 +300,81 @@ module variables
 
 
     end subroutine
-    
+
+
+
+
+    subroutine sim3dw_saveload(dummy)
+
+        real, intent(in) :: dummy
+        logical exists !check if current file exists
+        integer readstatus
+        character(200) str2
+
+
+        write(str2,'(A,A,I0,A,I0,A,I0,A,F4.2,A)') trim(datafolder),'SOIL_hSOF-',nint(soilth(1)),'_vSOF-',nint(soilth(2)),'_size-',nxe*nye*nze,'_esize-',dz,'.dat'
+        inquire(file=str2,exist=exists) !check if the file exists 
+        if(.not. exists) then
+            call sim3d_nosubset(efld,nxe,nye,nze,zroom,nxew,nyew,nzew,dx,dy,dz,kseed,MXM,MXK, &
+                        C0,CC,CE,CS,CI,AC,AE,AS,AI,ATC, ATS, ATI,CTC,CTS,CTI,M,k1,k2,k3,kk,sdata,distribution,anisotropy)
+            open(667, file=str2, access='stream')
+            write(667) efld
+            close(667)
+        else
+            ! soil exists on file, load it in
+            open(667, file=str2, status='old', access='stream')
+            read(667,iostat=readstatus) efld
+            close(667)
+        end if
+        if(readstatus < 0) then	
+            write(*,*) "Error, saved soil doesn't fit current inputs."
+            write(*,*) "Try deleting it and trying again."
+            stop
+        end if
+
+        ! transform soil from zero-mean, unit distribution, normally-distributed, volume into field of desired statistics.
+        call transform_soil(efld(:,:,:nze),nxe*nye*nze,sdata,distribution)
+
+    end subroutine
+
+
+    subroutine piecewise_saveload(dummy)
+
+        real, intent(in) :: dummy
+        logical exists !check if current file exists
+        integer readstatus
+        character(200) str2
+
+
+        write(str2,'(A,A,I0,A,I0,A,I0,A,F4.2,A)') trim(datafolder),'SOIL_hSOF-',nint(soilth(1)),'_vSOF-',nint(soilth(2)),'_size-',nxe*nye*nze,'_esize-',dz,'.dat'
+        inquire(file=str2,exist=exists) !check if the file exists 
+        if(.not. exists) then
+            call cmd_piecewise_loop(efld, nxe,nye,nze ,R0x, R0y, R0z,sdata, distribution)
+            open(667, file=str2, access='stream')
+            write(667) efld
+            close(667)
+        else
+            ! soil exists on file, load it in
+            open(667, file=str2, status='old', access='stream')
+            read(667,iostat=readstatus) efld
+            close(667)
+        end if
+        if(readstatus < 0) then	
+            write(*,*) "Error, saved soil doesn't fit current inputs."
+            write(*,*) "Try deleting it and trying again."
+            stop
+        end if
+
+        ! transform soil from zero-mean, unit distribution, normally-distributed, volume into field of desired statistics.
+        call transform_soil(efld,size(efld),sdata,distribution)
+
+
+
+    end subroutine
+
+
+    ! These subroutines below are wrappers/interfaces for subroutines in other modules. They are here because
+    ! the pointer needs to point to a subroutine in the same module
     
     !wrapper for the sim3d subroutine that generates virtual soils
     subroutine sim3dw(dummy)
@@ -304,6 +392,8 @@ module variables
     real, intent(in) :: dummy
     call sim3d_nosubset(efld,nxe,nye,nze,zroom,nxew,nyew,nzew,dx,dy,dz,kseed,MXM,MXK, &
                       C0,CC,CE,CS,CI,AC,AE,AS,AI,ATC, ATS, ATI,CTC,CTS,CTI,M,k1,k2,k3,kk,sdata,distribution,anisotropy)
+    ! transform soil from zero-mean, unit distribution, normally-distributed, volume into field of desired statistics.
+    call transform_soil(efld(:,:,:nze),nxe*nye*nze,sdata,distribution)
     
     end subroutine
     
@@ -323,6 +413,8 @@ module variables
     real, intent(in) :: dummy
 		
     call cmd_piecewise_loop(efld, nxe,nye,nze ,R0x, R0y, R0z,sdata, distribution)
+
+    call transform_soil(efld,size(efld),sdata,distribution)
     
     end subroutine
         

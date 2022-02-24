@@ -11,7 +11,7 @@ contains
 !This greatly increases the speed of the process in the Evolutionary algorithm, where the 
 !same soils are used over and over
 
-subroutine storesoils(soilseeds,nrep_MC,datafolder)
+subroutine storesoils(soilseeds,nrep_MC)
 
 implicit none
 
@@ -19,7 +19,6 @@ implicit none
       !real(4) :: efldave(nxew,nyew,nzew) !virtual soil averaged across the MC realisations
       integer, intent(in) :: soilseeds(nrep_MC)
 
-      character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
       
       integer, intent(in) :: nrep_MC
       
@@ -40,8 +39,7 @@ implicit none
       cov = nint(100*sdata(1,2)/sdata(1,1))
       generate = .false.
       
-      
-        if(nodisksave >= nrep_MC .and. singletrue .and. .not. superset) then !Read the soils into disk later. Make sure the soils have the correct statistics.
+        if(nodisksave >= nrep_MC .and. singletrue .and. superset==1) then !Read the soils into disk later. Make sure the soils have the correct statistics.
         !f the files don't exist, or are the wrong statistics, then regenerate them. 
             write(str2,'(A,A)') trim(datafolder),'soilstats.txt'
             inquire(file=str2,exist=exists) !check if the file exists 
@@ -112,7 +110,7 @@ end subroutine
 
 
 
-subroutine avesoil(soilseeds,nrep_MC,datafolder,efldave)
+subroutine avesoil(soilseeds,nrep_MC,efldave)
 
 	!calculate the average soil across Monte Carlo realisations
 
@@ -130,8 +128,6 @@ subroutine avesoil(soilseeds,nrep_MC,datafolder,efldave)
       real(8) :: efldavedb(nxew,nyew,nzew) !virtual soil averaged across the MC realisations, double precision
       
       integer, intent(in) :: soilseeds(nrep_MC)
-
-      character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
       
       integer, intent(in) :: nrep_MC
       
@@ -196,7 +192,7 @@ subroutine avesoil(soilseeds,nrep_MC,datafolder,efldave)
 end subroutine
 
 
-subroutine exportsoil(soilseeds,nrep_MC,datafolder)
+subroutine exportsoil(soilseeds,nrep_MC)
 						 
 
 	!This subroutine exports soils to .
@@ -207,7 +203,7 @@ subroutine exportsoil(soilseeds,nrep_MC,datafolder)
 
       integer, intent(in) :: soilseeds(nrep_MC)
 
-      character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
+      !character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
       
       integer, intent(in) :: nrep_MC
 
@@ -247,7 +243,7 @@ subroutine exportsoil(soilseeds,nrep_MC,datafolder)
         end if
         
         !generate big single layer here if specified
-        if(singletrue .and. superset) call RF3D(soil_dummy_var)
+        if(singletrue .and. superset > 1) call RF3D(soil_dummy_var)
         
         
 		do i = soil_reps(1),abs(soil_reps(2))     !Loop through Monte Carlo realisations
@@ -256,15 +252,16 @@ subroutine exportsoil(soilseeds,nrep_MC,datafolder)
 
             
             if (singletrue) then !output single layer
-                if (superset) then !generate subsets from big soils
+
+                if (superset > 1) then !generate subsets from big soils
                    xpos=NINT(randu(0)*(nxe-nxew))
 		           ypos=NINT(randu(0)*(nye-nyew))
 		           zpos=NINT(randu(0)*(nze-nzew))
                    
-                   call savetofile_binary(efld(xpos+1:xpos+nxew,ypos+1:ypos+nyew,zpos+1:zpos+nzew),str2,i)
+                   call savetofile(efld(xpos+1:xpos+nxew,ypos+1:ypos+nyew,zpos+1:zpos+nzew),str2,i)
                 else !otherwise generate individual soils
                    call RF3D(soil_dummy_var)       !call single layer soil
-                   efld = efld * emean
+                   !efld = efld * emean
                    call savetofile(efld,str2,i)
                 end if
             else !save multiple layer soils, both the 3D one (need to construct manually) and boundary layers
@@ -295,7 +292,7 @@ subroutine exportsoil(soilseeds,nrep_MC,datafolder)
                     close(200)
                 end do
                 
-                call savetofile_binary(efld,str2,i)
+                call savetofile(efld,str2,i)
                 
             end if 
 					 
@@ -331,9 +328,9 @@ integer x,y,z
 	!Save the file in a long row of fixed-width values. X is varying first, then Y, then Z the slowest.
 	write(str2,'(A,I0,A)') 'soil',i,'.txt'
 	open(200,file=str2)
-    write(200,'(I0,A)') nxew,' X dimension (varying slowest)'
+    write(200,'(I0,A)') nxew,' X dimension (varying fastest)'
     write(200,'(I0,A)') nyew,' Y dimension'
-    write(200,'(I0,A)') nzew,' Z dimension (varying fastest)'
+    write(200,'(I0,A)') nzew,' Z dimension (varying slowest)'
 	!write(200,'(1000000000(E14.7,A))') ((((efld(x,y,z),' '),x=1,nxew),y=1,nyew),z=1,nzew)
     do z = 1,nzew
         do y = 1,nyew

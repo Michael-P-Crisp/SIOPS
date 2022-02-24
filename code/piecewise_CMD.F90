@@ -295,7 +295,7 @@ module piecewise_CMD
       soil = (soil-mean)/sd
 
 
-    call transform_soil(soil,size(soil),sdata,stype)
+    
     
 
     

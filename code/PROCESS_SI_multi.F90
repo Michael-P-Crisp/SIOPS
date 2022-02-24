@@ -41,13 +41,13 @@ contains
     subroutine get_si_perf_multi(soilseeds, & !soil generation variables
                       ninv,nbh,in_tests,in_depths,in_reductions,inv_bh,inv_coords,inv_depths,inv_test,add_errors,use_CI,test_errors,inv_reduction,conf_int,percentile,s_dev,soffset,swidth,sstep &					!site investigation variables
                       ,npdepths,detdisp,plocation,pdepths,ck_set,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,EA_generation,deterministic,abstol, &
-        femvech,femvecv,prad,datafolder,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,finaloutput,invcount,fcost, pcost, probfail, avediff, diffgeo)
+        femvech,femvecv,prad,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,finaloutput,invcount,fcost, pcost, probfail, avediff, diffgeo)
                       
                       
 ! ----- soil generation variables (don't touch) ----
       integer iseed
       integer, intent(in) :: soilseeds(:)
-      character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
+      !character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
       character(200) :: soildsc !soil description string containing soil attributes, to help distinguish between different cases, particularly single layer vs multiple layers
 
       real efld2D(nlayer,nxew,nyew) ! 2D random field of Young's modulus properties for each layer
@@ -147,7 +147,8 @@ contains
     real icost(ninv) !average costs associate with investigation
     real, intent(out) :: fcost(:), pcost(:), probfail(:), avediff(:), diffgeo(:) !failure cost, pile cost, prob. failure, ave. diff. set, geometric statistic
     real :: diffgeo2(ninv)
-
+
+
 
 	real :: costs(nrep_MC,ninv) !costs for each investigation and realisation
 	real :: diffset(nrep_MC,ninv) !max differential settlement for each investigation and realisation
@@ -291,7 +292,7 @@ contains
 
 		!---loop through Monte Carlo realisations---
         !if specified, the CK soils have been pre-processed along with the CK layer depths at pile locations. No need to generate them again.
-    if (superset) then
+    if (superset > 1) then
 		do iter = 1,nrep_MC    
 			!call cpu_time(start)
             !write(*,*) iter

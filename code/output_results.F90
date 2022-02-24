@@ -78,6 +78,8 @@ real tempsd !temp standard deviation
     	  	write(str2,'(A,I0,A,I0,A,A)') 'si_results/Population-stats_piles-',goodcases,'_BArea-',nint(buildingarea),trim(soildsc),'.txt'
     		write(str3,'(A,I0,A,I0,A,A)') 'si_results/Population-Xcoords_piles-',goodcases,'_BArea-',nint(buildingarea),trim(soildsc),'.txt'
 			write(str4,'(A,I0,A,I0,A,A)') 'si_results/Population-Ycoords_piles-',goodcases,'_BArea-',nint(buildingarea),trim(soildsc),'.txt'
+
+			
   
     	
 			open(505,file=str2)

@@ -233,7 +233,7 @@ program main
 	!external functions
 	real randu  !function for random number generation
 	integer iseed !seed initialisation function
-    character(1000) :: datafolder !the directory the data is stored in
+    !character(1000) :: datafolder !the directory the data is stored in
     
     real, allocatable :: evals2d(:,:)
     real pdisp
@@ -256,14 +256,14 @@ program main
 	call inputs_exist()
 	
     !get evolutionary algorithm input
-	call evol_input(nrep_MC,maxEA,runmode,EAseed,soilseeds,costmetric,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,mut_lims,imut,datafolder,siea_mode,num_elite,stopmode,unistart,opt_local)
+	call evol_input(nrep_MC,maxEA,runmode,EAseed,soilseeds,costmetric,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,mut_lims,imut,siea_mode,num_elite,stopmode,unistart,opt_local)
 
 	!get soil input variables
 	call readin_soil(nrep_MC)
 		
     !get pile and building inputs
     call readin_pile(femrad,femdepth,prad,npdepths,pdepths,cg_tol,cg_limit,preps,plocation,nels,costvals,failurevals, & !nbh,bhdepth
-		buildingweight,load_con,rel_loads,num_loads,dz,detdisp,femvech,femvecv,pilecost,difftol,usepie,regmesh,abstol,emean,datafolder,goodpiles,goodcases)
+		buildingweight,load_con,rel_loads,num_loads,dz,detdisp,femvech,femvecv,pilecost,difftol,usepie,regmesh,abstol,emean,goodpiles,goodcases,istat)
     
     !get site investigation inputs
     call readin_si(soffset,swidth,sstep,ntest,testerrors,sampfreq, & !nbh,bhdepth
@@ -271,7 +271,7 @@ program main
         
     !do deterministic analysis to check average pile designs, if requested
     if (deterministic == 0) then
-        call det_check(datafolder,pdepths,npdepths,num_loads,abstol,difftol,buildingweight,preps,rel_loads,load_con,in_sdev,in_percentile,prad,femrad,goodpiles,goodcases,plocation)
+        call det_check(pdepths,npdepths,num_loads,abstol,difftol,buildingweight,preps,rel_loads,load_con,in_sdev,in_percentile,prad,femrad,goodpiles,goodcases,plocation)
         stop
     end if
 	
@@ -281,11 +281,11 @@ program main
 	
 	!Export a range of virtual soils as CSVs if soil_reps(1) is greater than 1.
 	!X is varying first, then Y, then Z the slowest.
-    call exportsoil(soilseeds,nrep_MC,datafolder)
+    call exportsoil(soilseeds,nrep_MC)
     
     !if runmode == 'al' (all), then figure out which components need to be done based on the 
 	!existence and size of files in the data folder, compared to the inputs
-	call checkdata(runmode,datafolder,npdepths,preps(1)*preps(2),nrep_MC,thismode,startstress,prad,soilweight)
+	call checkdata(runmode,npdepths,preps(1)*preps(2),nrep_MC,thismode,startstress,prad,soilweight)
 
 	
 		!------------------------------ GET FEA PILE INFORMATION  --------------------------------
@@ -307,7 +307,7 @@ program main
         !The CK and SI modes both depend on the determininistic pile settlement curve generated with this subroutine.
         !Additionally, the CK settlement curves are calculated using the PIE method, and need the weights from this
         !subroutine in order to produce the weighted average soil at each pile length and the associated settlement.
-        call getweights(dz,femrad,femdepth,prad,npdepths,pdepths,cg_tol,cg_limit,startstress,datafolder,soilweight)
+        call getweights(dz,femrad,femdepth,prad,npdepths,pdepths,cg_tol,cg_limit,startstress,soilweight)
         if(runmode == 'PP') stop
     end if
     
@@ -335,7 +335,7 @@ program main
     	
 		
 		!get complete knowledge pile performance
-        if(singletrue .or. .not. (singletrue .or. usepie))  call read_ck(nrep_MC,npdepths,preps,ck_pset,datafolder,detdisp,pdepths,prad)
+        if(singletrue .or. .not. (singletrue .or. usepie))  call read_ck(nrep_MC,npdepths,preps,ck_pset,detdisp,pdepths,prad)
         if((.not. singletrue)) call prepmultiSI(npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,preps,load_con,usepie,femrad,soilseeds,prad,nrep_MC,plocation)
         
         !Nodisksave: 0 = keep in ram (much slower, but can save a fair amount of disk space), 1=write and read soil, 2=read soil only
@@ -350,7 +350,7 @@ program main
 
             !Get a very big soil from which to extract a subset (for superset mode)
         !Note that superset won't work properly with FEM specified for CK analysis.
-	    if (singletrue .and. superset) then
+	    if (singletrue .and. superset > 1) then
 	    	write(*,*) 'Generating soil superset (this may take several minutes)'
             kseed = randu(soilseeds(1)) * 1234567890 !ensure random numbers are consistent across MC realisations
             call RF3D(soil_dummy_var)
@@ -399,7 +399,7 @@ program main
                 !Get site investigation performance in variable, single layer soils
     	        call get_si_perf(soilseeds & !soil generation variables
                           ,ninv,nbhmax,size(in_tests),size(in_depths),size(in_reductions),inv_nbh,inv_coords,inv_depths,inv_test,add_errors,use_CI,testerrors,inv_reduction,conf_int,percentile,s_dev,soffset,swidth,sstep &					!site investigation variables
-                          ,npdepths,detdisp,plocation,pdepths,ck_pset,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,1,deterministic,finaloutput,abstol,datafolder,invcount,goodpiles,goodcases,fcost, pcost, probfail, avediff, diffgeo)
+                          ,npdepths,detdisp,plocation,pdepths,ck_pset,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,1,deterministic,finaloutput,abstol,invcount,goodpiles,goodcases,fcost, pcost, probfail, avediff, diffgeo)
             
             else
 
@@ -407,7 +407,7 @@ program main
                 call get_si_perf_multi(soilseeds & !soil generation variables
                           ,ninv,nbhmax,size(in_tests),size(in_depths),size(in_reductions),inv_nbh,inv_coords,inv_depths,inv_test,add_errors,use_CI,testerrors,inv_reduction,conf_int,percentile,s_dev,soffset,swidth,sstep &					!site investigation variables
                           ,npdepths,detdisp,plocation,pdepths,ck_pset,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,1,deterministic,abstol, &
-                    femvech,femvecv,prad,datafolder,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,finaloutput,invcount,fcost, pcost, probfail, avediff, diffgeo)  !multiple layer site investigations
+                    femvech,femvecv,prad,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,finaloutput,invcount,fcost, pcost, probfail, avediff, diffgeo)  !multiple layer site investigations
             end if
             
             
@@ -434,7 +434,7 @@ program main
                     !Get site investigation performance in variable, single layer soils
     	            call get_si_perf(soilseeds & !soil generation variables
                               ,ninv,1,size(in_tests),size(in_depths),size(in_reductions),inv_nbh,inv_coords,inv_depths,inv_test,add_errors,use_CI,testerrors,inv_reduction,conf_int,percentile,s_dev,soffset,swidth,sstep &					!site investigation variables
-                              ,npdepths,detdisp,plocation,pdepths,ck_pset,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,i,deterministic,finaloutput,abstol,datafolder,invcount,goodpiles,goodcases,fcost, pcost, probfail, avediff, diffgeo)
+                              ,npdepths,detdisp,plocation,pdepths,ck_pset,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,i,deterministic,finaloutput,abstol,invcount,goodpiles,goodcases,fcost, pcost, probfail, avediff, diffgeo)
             
                 else
             	
@@ -443,7 +443,7 @@ program main
                     call get_si_perf_multi(soilseeds & !soil generation variables
                               ,ninv,1,size(in_tests),size(in_depths),size(in_reductions),inv_nbh,inv_coords,inv_depths,inv_test,add_errors,use_CI,testerrors,inv_reduction,conf_int,percentile,s_dev,soffset,swidth,sstep &					!site investigation variables
                               ,npdepths,detdisp,plocation,pdepths,ck_pset,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,i,deterministic,abstol, &
-                        femvech,femvecv,prad,datafolder,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,finaloutput,invcount,fcost, pcost, probfail, avediff, diffgeo)  !multiple layer site investigations
+                        femvech,femvecv,prad,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,finaloutput,invcount,fcost, pcost, probfail, avediff, diffgeo)  !multiple layer site investigations
                 end if
                 
             end do
@@ -503,7 +503,7 @@ program main
                 call EAprep(soilseeds, & !soil generation variables
                       inv_nbh(i),inv_depths(1,i,:),inv_test(1,i),add_errors,use_CI,testerrors,inv_reduction(i),conf_int,percentile(i),s_dev(i),soffset,swidth,sstep &					!site investigation variables
                       ,npdepths,detdisp,plocation,pdepths,ck_pset,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance(i),pilecost,testcost,testnames,costmetric,abstol &
-                    ,maxEA,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,mut_lims,imut,datafolder,i,EAseed,siea_mode,num_elite,stopmode,unistart,opt_local, & !EA variables
+                    ,maxEA,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,mut_lims,imut,i,EAseed,siea_mode,num_elite,stopmode,unistart,opt_local, & !EA variables
                     femvech,femvecv,prad,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight) !multi layer site investigation variables
             
             end do

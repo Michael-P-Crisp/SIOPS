@@ -408,7 +408,7 @@ subroutine sim3d_nosubset(efld,nxe,nye,nze,zroom,nxew,nyew,nzew,dx,dy,dz,kseed,M
      
 
          
-            call transform_soil(efld(:,:,:nze),nxe*nye*nze,sdata,stype)
+            
             
                 !open(505,file='soil.dat',access='stream')
 				!write(505) efld(:,:,:nze)

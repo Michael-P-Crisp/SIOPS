@@ -15,10 +15,10 @@ implicit none
    
     
     
-       subroutine det_check(datafolder,pdepths,npdepths,num_loads,abstol,difftol,buildingweight,preps,rel_loads,load_con,in_sdev,in_percentile,prad,femrad,goodpiles,goodcases,plocation) 
+       subroutine det_check(pdepths,npdepths,num_loads,abstol,difftol,buildingweight,preps,rel_loads,load_con,in_sdev,in_percentile,prad,femrad,goodpiles,goodcases,plocation) 
        
        
-       character(100), intent(in) :: datafolder !directory of data
+       !character(100), intent(in) :: datafolder !directory of data
        integer, intent(in) :: npdepths !number of pile depths in single layer mode
        integer, intent(in) :: num_loads
        real, intent(in) :: abstol,difftol,buildingweight

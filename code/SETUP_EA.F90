@@ -14,7 +14,7 @@ module setup_EA
     subroutine EAprep(soilseeds, & !soil generation variables
                       inv_bh_in,inv_depths_in,inv_test_in,add_errors,use_CI,test_errors,inv_reduction_in,conf_int,percentile_in,s_dev_in,soffset,swidth,sstep &					!site investigation variables
                       ,npdepths,detdisp,plocation,pdepths,ck_set,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,abstol &
-    ,maxEA,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,mut_lims,imut,datafolder,inv_no,EAseed,siea_mode,num_elite,stopmode,unistart,opt_local, & !EA variables
+    ,maxEA,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,mut_lims,imut,inv_no,EAseed,siea_mode,num_elite,stopmode,unistart,opt_local, & !EA variables
     femvech,femvecv,prad,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight)  !multiple layer site investigations
     
 
@@ -37,7 +37,6 @@ module setup_EA
         
         real, intent(in) :: frac_keep      !fraction of population to keep after each EA iteration
         integer, intent(in) :: finaloutput !output mode for EA. 1 = final only, 2 = save best of each EA generation, 3 = save full final population, 4 = save everything
-    	character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
         
         integer, intent(in) :: inv_no !the number of the current investigation being optimised
         integer, intent(in) :: EAseed !random seed for evolutionary algorithm (set to 0 for clock-based, or higher for consistent numbers each run)
@@ -293,7 +292,7 @@ module setup_EA
     call my_cga(soilseeds, & !soil generation variables
                       popsize,inv_bh_in,inv_bh,inv_depths,inv_test,add_errors,use_CI,test_errors,inv_reduction,conf_int,percentile,s_dev,inv_coords,mininv_coords,mincost &					!site investigation variables
                       ,npdepths,detdisp,plocation,pdepths,ck_set,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,abstol &
-    ,maxEA,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,numvar,lo,hi,mut_lims,imut,datafolder,inv_no,num_elite,stopmode,iga,propbadmc,fulltime, & !EA variables
+    ,maxEA,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,numvar,lo,hi,mut_lims,imut,inv_no,num_elite,stopmode,iga,propbadmc,fulltime, & !EA variables
     femvech,femvecv,prad,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,sstep,opt_stats) !multiple layer site investigations
     
     
@@ -328,7 +327,7 @@ module setup_EA
         call my_cga(soilseeds, & !soil generation variables
                       popsize,inv_bh_in,inv_bh,inv_depths,inv_test,add_errors,use_CI,test_errors,inv_reduction,conf_int,percentile,s_dev,inv_coords,mininv_coords,mincost2 &					!site investigation variables
                       ,npdepths,detdisp,plocation,pdepths,ck_set,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,abstol &
-    ,maxEA,deterministic,max_cons/2,popsize,perc_error,mut_rate,frac_keep,finaloutput,numvar,lo,hi,mut_lims,imut,datafolder,inv_no,num_elite,stopmode,iga2,propbadmc,fulltime2, & !EA variables
+    ,maxEA,deterministic,max_cons/2,popsize,perc_error,mut_rate,frac_keep,finaloutput,numvar,lo,hi,mut_lims,imut,inv_no,num_elite,stopmode,iga2,propbadmc,fulltime2, & !EA variables
     femvech,femvecv,prad,usepie,npl2,goodpiles,goodcases,sdist,sumweights,extents,indices,CKheight,sstep,opt_stats2) !multiple layer site investigations
         
         !ensure that the true optimal case is saved. Shouldn't really need this, especially if elitism is used, but it's good to be sure

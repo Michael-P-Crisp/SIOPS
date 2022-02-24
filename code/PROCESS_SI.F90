@@ -36,7 +36,7 @@ contains
     
     subroutine get_si_perf(soilseeds,ninv,nbh,in_tests,in_depths,in_reductions,inv_bh,inv_coords,inv_depths,inv_test,add_errors,use_CI,test_errors,inv_reduction,conf_int,percentile,s_dev,soffset,swidth,sstep &					!site investigation variables
                       ,npdepths,detdisp,plocation,pdepths,ck_set,nrep_mc,rel_loads,load_con,num_loads,preps,buildingweight,difftol,failurevals,costvals,si_performance,pilecost,testcost,testnames,costmetric,EA_generation &
-                      ,deterministic,finaloutput,abstol,datafolder,invcount,goodpiles,goodcases,fcost, pcost, probfail, avediff, diffgeo)
+                      ,deterministic,finaloutput,abstol,invcount,goodpiles,goodcases,fcost, pcost, probfail, avediff, diffgeo)
                       
                       
 ! ----- soil generation variables (don't touch) ----
@@ -135,7 +135,7 @@ contains
     integer, intent(in) :: costmetric !Performance metric to use. -1 = failure cost, 0 = probability of failure, 1 or more = average differntial settlement to the power of the costmetric value (higher values more heavily penalise excessive values)
     integer, intent(in) :: EA_generation !current generation of the EA algorithm
     integer, intent(in) :: finaloutput !output mode for EA. 1 = final only, 2 = save best of each EA generation, 3 = save full final population, 4 = save everything
-    character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
+    !character(1000),intent(in) :: datafolder !a string representing the directory the data is stored in
     
     integer pd,iter,x,y,jr,counter,i,j,pile,p2 !loop counters
     real randu !random generator
@@ -175,7 +175,7 @@ contains
     !    
     !else
 
-        if(superset) then
+        if(superset > 1) then
             
             
             call cpu_time(s1)
@@ -271,6 +271,7 @@ contains
             !call cpu_time(s1)
     
             !############################# PROCESS PILE CONFIGURATION ###############################
+
                 
     
             !calculate distances between each pile here instead of in the heavily nested loop below
@@ -381,6 +382,14 @@ contains
 	write(soildsc,'(A,I0,A,I0,A,I0)') '_sof-',nint(soilth(1)),'_cov-',nint(100*sdata(1,2)/sdata(1,1)),'_anis-',anisotropy
     call save_output(soildsc,finaloutput,deterministic,goodcases,goodloc,invcount,nrep_MC,buildingarea,ninv,nbh,in_tests,in_depths,in_reductions,dz,inv_coords,inv_bh,inv_depths,inv_reduction,inv_test,swidth,soffset,sstep,testnames,rednames, &
 			EA_generation,costmetric,plocation,avesides,diffset,si_performance,costs,fcost,pcost,icost,probfail,avediff,diffgeo,diffgeo2)
+
+
+        ! save Evals for each investigation and Monte Carlo realisation to a binary file
+    write(str2,'(A,I0,A,I0,A,A)') 'si_results/Evals_piles-',goodcases,'_BArea-',nint(buildingarea),trim(soildsc),'.dat'
+    open(505,file=str2, access='stream')
+    write(505) evals
+    close(505)
+
 
     !print average and standard deviation of differential settlement and pile lengths for current input
     !for predominantly debugging purposes

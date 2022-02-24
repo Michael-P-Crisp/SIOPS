@@ -162,9 +162,9 @@ contains
         read(inn,*) enforcelcoords
         
         !overwrite some more variables if arguments are present
-        if(num_args >= 4) then
+        if(num_args >= 5) then
         	soilth(1) = getarg_real()
-            soilth(2) = soilth(1)
+            soilth(2) = getarg_real() !soilth(1)
 ! 			nlayer = getarg_real()
 ! 			do i = 1,nlayer
 ! 				ldepths(i) = getarg_real()
@@ -179,11 +179,11 @@ contains
         anisotropy = nint(soilth(1)/soilth(2))	!for label purposes, round anisotropy to the nearest integer
         
         
-        if(num_args >= 5) bsd = nint(getarg_real())
+        if(num_args >= 6) bsd = nint(getarg_real())
         
-        if(num_args >= 6) ldepths(1) = nint(getarg_real())
+        if(num_args >= 7) ldepths(1) = nint(getarg_real())
         
-        if(num_args >= 8) then
+        if(num_args >= 9) then
             deallocate(lmean_ave)
             allocate(lmean_ave(max(nlayer,3)))
             lmean_ave(1) = getarg_real()
@@ -209,12 +209,12 @@ contains
         end if 
         
         if (singletrue) then
-            if (superset) then
+            if (superset > 1) then
                 nxe = nxe * superscale
                 nye = nye * superscale
                 nze = nze * superscale
                 !allocate full soil field
-                if (anisotropy == 1) then
+                if (is_isotropic) then
                     allocate(efld(nxe,nye,5*nze/4)) !LAS needs a bit of extra room for storage 
                 else
                     allocate(efld(nxe,nye,nze))
@@ -337,7 +337,7 @@ contains
 		!read in pile data. Calculate pile coordinates
 	
 		subroutine readin_pile(femrad,femdepth,prad,npdepths,pdepths,cg_tol,cg_limit,preps,plocation,nels,costvals,failurevals, & !nbh,bhdepth
-		buildingweight,load_con,rel_loads,num_loads,dz,detdisp,femvech,femvecv,pilecost,difftol,usepie,regmesh,abstol,emean,datafolder,goodpiles,goodcases)
+		buildingweight,load_con,rel_loads,num_loads,dz,detdisp,femvech,femvecv,pilecost,difftol,usepie,regmesh,abstol,emean,goodpiles,goodcases,istat)
 		
 		
 		integer, intent(out) :: femrad,femdepth !radius and depth of soil around pile (elements)
@@ -363,7 +363,7 @@ contains
 		real(8), intent(in) :: dz
         real, intent(out) :: abstol !absolute settlement tolerance  (mm). Positive values are used directly. Negative values make it a function of differential settlement * minimum pile spacing (i.e., automatically determined).
         real, intent(in) :: emean !mean soil stiffness
-        character(100), intent(in) :: datafolder !directory of data
+
         
         integer, allocatable, intent(out) :: goodpiles(:)        !vector of piles that have an associated applied load
     	integer, intent(out) :: goodcases   
@@ -398,6 +398,8 @@ contains
         integer num_args !number of command line input arguments
         character(1000) str2
 
+        integer, intent(in) :: istat ! debug file
+
         !If number of arguments is greater than zero, assume that multiple instances of the program are running in parallel.
         !Don't save the pile locations, as it's duplicate information and may cause output conflicts.
         num_args = command_argument_count()
@@ -431,15 +433,29 @@ contains
         seth = [6.5,4.5,3.,2.,1.5,1.,0.5,1.,1.5,2.,3.,4.5,6.5]		!series of FEM element sizes in the horizontal direction
         setv = [0.5,1.,1.5,2.]				!series of FEM element sizes in the vertical direction
         
-		read (inn,*) prad(1),prad(2)
+		read (inn, *) pile_foundation
+        read (inn,*) prad(1),prad(2)
         read (inn,*) difftol
         read (inn,*) abstol
 		read (inn,*) npdepths
-        femrad = nint(npdepths/dz)
-        femdepth = femrad*2
-        npdepths = npdepths + 1
-        allocate(pdepths(npdepths))
-        pdepths = [(nint(i/dz),i=0,npdepths-1)]
+        if (pile_foundation) then ! pile foundation
+            femrad = nint(npdepths/dz)
+            femdepth = femrad*2
+            npdepths = npdepths + 1
+            allocate(pdepths(npdepths))
+            pdepths = [(nint(i/dz),i=0,npdepths-1)]
+        else ! pad footing
+            femrad = maxval(prad) * 5 ! make FEM boundary 5x the distance from the pad of the maximum footing width
+            femdepth = maxval(prad) * 4
+            npdepths = ceiling(real(maxval(prad))/2)
+            allocate(pdepths(npdepths))  ! number of footing widths to assess
+            pdepths = [(i, i=1,maxval(prad),2)]
+        end if
+
+        if ((.not. singletrue) .and. (.not. pile_foundation)) then
+			write(istat,*) "error: pad footings aren't supported in multi-layer mode"
+			stop
+        end if
         
 							
 		!read (inn,*) (pdepths(i),i=1,npdepths)		!The footing depth values to analyse
@@ -481,7 +497,7 @@ contains
 		        read(inn,*) (load_con(x),x= (y-1)*preps(1) + 1, y*preps(1))
             end do
         end if
-		if(num_args >= numpiles + 8) then
+		if(num_args >= numpiles + 9) then
 			i=0
 			do y= 1,preps(2)
 				do x = 1,preps(1)
@@ -494,7 +510,7 @@ contains
 		allocate(rel_loads(num_loads))
 		read (inn,*) rel_loads
 		read (inn,*) buildingarea
-		if(num_args > numpiles + 9) buildingarea = getarg_real()	
+		if(num_args > numpiles + 10) buildingarea = getarg_real()	
 		read (inn,*) numfloors
 		read (inn,*) applied_load
 		read (inn,*) failurevals
@@ -519,7 +535,7 @@ contains
         
         !---build vectors of FEM mesh information when variable-mesh FEM is used instead of the PIE method for CK settlement---
         !NOTE: The variable-mesh mode has been commented out for the publicly-released version as it's too time consuming to use.
-         allocate(femvech(int(sum(setnumh))),femvecv(int(sum(setnumv))))
+        allocate(femvech(int(sum(setnumh))),femvecv(int(sum(setnumv))))
  		count = 0
          do i=1,femh
              do j = 1,setnumh(i)
@@ -627,7 +643,7 @@ contains
 		read (inn,*) swidth(1),swidth(2)
         read (inn,*) sstep(1),sstep(2)    
         !sstep = [1,1]
-		if(num_args >= numpiles + 10) then
+		if(num_args >= numpiles + 11) then
 			swidth(1) = getarg_real()
 			swidth(2) = swidth(1) !assume it's square for now
 		end if
@@ -657,15 +673,15 @@ contains
 		allocate(bhnums(nbh),in_tests(n_test),in_depths(n_depths),in_reductions(n_red))
         read (inn,*) (bhnums(i),i=1,nbh)		!Read in list of borehole numbers
 		read (inn,*) (in_tests(i),i=1,n_test)
-		if(num_args >= numpiles + 11) in_tests(1) = getarg_real()
+		if(num_args >= numpiles + 12) in_tests(1) = getarg_real()
 		read (inn,*) (in_reductions(i),i=1,n_red)
-		if(num_args >= numpiles + 12) then
+		if(num_args >= numpiles + 13) then
 			temparg = getarg_real()
 			in_reductions(1) = rednames(temparg)
 		end if
 		read (inn,*) (in_depths(i),i=1,n_depths)
-		if(num_args >= numpiles + 13) in_depths(1) = getarg_real()
-		if(num_args >= numpiles + 14) bhnums(1) = getarg_real()
+		if(num_args >= numpiles + 14) in_depths(1) = getarg_real()
+		if(num_args >= numpiles + 15) bhnums(1) = getarg_real()
 		
         !Check for validity of reduction method
         do i = 1,n_test
@@ -707,7 +723,7 @@ contains
 	
 	
 	!get input related to usage of the evolutionary algorithm
-	subroutine evol_input(nrep_MC,maxEA,runmode,EAseed,soilseeds,costmetric,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,mut_lims,imut,datafolder,siea_mode,num_elite,stopmode,unistart,local_opt)
+	subroutine evol_input(nrep_MC,maxEA,runmode,EAseed,soilseeds,costmetric,deterministic,max_cons,popsize,perc_error,mut_rate,frac_keep,finaloutput,mut_lims,imut,siea_mode,num_elite,stopmode,unistart,local_opt)
 
 	
 	character(100) :: str
@@ -726,7 +742,7 @@ contains
     integer, intent(out) :: deterministic !whether a site investigation is assessed for performance once (true) or optimised in an evolutionary algorithm (false)
 	integer, intent(out) :: finaloutput !output mode for EA. 1 = final only, 2 = save best of each EA generation, 3 = save full final population, 4 = save everything
     integer soilseed,EAseed !random seeds for virtual soil and genetic algorithm. Set to 0 to be random (clock based) or higher for consistent random numbers. VERY strongly recommend soilseed be kept as a positive integer (e.g 100).
-    character(1000),intent(out) :: datafolder
+    !character(1000),intent(out) :: datafolder
     integer, intent(out) :: siea_mode !manner of controlling the borehole locations in the EA. 1 Means start across full soil. 2 Means Start within building footprint. 3 Means ALWAYS keep within building footprint.
 	integer, intent(out) :: num_elite !number of elite population members that are carried over into the next generation, unmutated
     logical, intent(out) :: stopmode !.true. means wait for EA to have converged (remain unchanged for a number of realisations), .false. means wait for a number of iterations past the current GLOBAL optimum before stopping (in case fitness starts increasing).
@@ -854,14 +870,13 @@ contains
 	
 	
 	
-	subroutine read_ck(nrep_MC,npdepths,preps,ck_set,datafolder,detdisp,pdepths,prad)
+	subroutine read_ck(nrep_MC,npdepths,preps,ck_set,detdisp,pdepths,prad)
 	
 	
 	real, allocatable, intent(out) :: ck_set(:,:,:)
     real, allocatable :: pilecurves(:,:)
 	integer counter,x,y,pd,i
 	character(1000) str2
-    character(1000),intent(in) :: datafolder
     real, intent(out) :: detdisp(:)
     integer, intent(in) :: prad(2)
     
