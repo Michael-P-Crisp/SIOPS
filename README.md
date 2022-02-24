@@ -1,2 +1,5 @@
-# SIOPS
+# SIOPS Dev Branch
+
+This is a new branch of SIOPS for unofficial development, meaning that the code here isn't as rigorously tested and is not officially supported. Documentation may not reflect the newest features either. Use at your own risk!
+
 SIOPS (site investigation optimisation for piles using statistics) is a versatile command-line tool for optimising geotechnical site investigations, allowing the user to quickly analyse the performance of a wide range of investigations. This in turn allows them to determine the best investigation scheme in terms of number, location, and type of test(s) by a number of different metrics. The building is assumed to be a generic multi-story structure supported by piles. The soil may be variable single layer or consist of multiple layers with constant properties. Statistical analysis is undertaken through the use of Monte Carlo analysis and random virtual soils. A genetic algorithm is also included. SIOPS is written entirely in modern Fortran. Please see the PDF instruction manual for details.
