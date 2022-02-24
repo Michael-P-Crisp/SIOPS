@@ -1,0 +1,20 @@
+ 1		!Program run mode 0 = pile design test, 1 = fixed mode, 2 = heat map mode, 3 = evolutionary mode
+ 10000		!number of Monte Carlo realisations
+ -4		!Performance metric to use. -4 failure cost, -3 total cost, -2 ave. diff. Settlement, -1 prob. Failure, >=0 geometric statistic
+ 100,100		!random seeds for virtual soil and genetic algorithm. Set to 0 to be random (clock based) or higher for consistent random numbers. VERY strongly recommend soilseed be kept as a positive integer (e.g 100).
+ PP  		!single layer processing option. PP = stage 1 preprocessing. CK = stage 2 preprocessing. SI = site investigation analysis. AL = automatic.
+ 4		!output mode for heat maps and GA. 1 outputs minimal, essential information. 4 outputs all information. See manual for other values.
+ 'Z:\data\'	!directory of the data folder
+ !evolutionary variables
+ 200		!max number of evolutionary algorithm iterations
+ 5		!max number of consecutively equal values
+ .false.		!Stopping mode: .true. means wait for it to have converged (remain unchanged for a number of realisations), .false. means wait for a number of iterations past the current GLOBAL optimum before stopping (in case fitness starts increasing).
+ 1000		!Population size
+ 1.0		!Percentage error for stop criteria (out of 100)
+ 0.1,0.001,0.2	!Mutation rates: Initial, minimum, maximum
+ 1		!mutation mode; 1 = constant, 2 = adapt based on fitness, 3 = adapt based on proximity in parameter space
+ 0.5		!Fraction of population to keep as parents
+ 1		!Number of population members to keep UNCHANGED from previous population (this concept is called elitism).
+ 1		!manner of controlling the borehole locations in the EA. 1 Means start across full soil. 2 Means Start within building footprint. 3 Means ALWAYS keep within building footprint.
+ .false.		!generate initial population using a uniform distribution, otherwise use normally-distributed offsets from a regular grid, iff possible
+ .true.		!conduct a 2nd phase of genetic algorithm optimisation using normal offsets from the fittest investigation of phase 1

@@ -1,0 +1,26 @@
+ .true.						!.true. for variable, single layer analysis, .false. for multiple layer analysis using uniform soil properties within each layer
+
+ 256 256 128	  	  			!number of x,y,z elements in original generated soil (must fit a*2^b)
+ 90  90  40					!x,y,z dimensions of site (m)
+ 3						! 1. Generate individual soils in each MC realisation. 2. pre-generate soils and store in memory (Should use one very large soil in single layer mode) 3. Same as 2 but try and read in single layer soil from disk if available.
+ 4						!The upscale factor for single layer soils. Recommend 5.
+ dlavx3	dlavx2					!correlation function for 3D and 2D LAS
+ 0.5						!size of elements (cube length)
+ 4096,	6					!limit for stage 0 matrix size, where this value is k1*k2*k3, max no. subdivisions
+ -1 -1						!Lower and upper range of MC realisations to export soils for. 1st value -ve doesn't export. 2nd value -ve exits after exporting.
+ !Single layer soil options
+ l						!soil distribution; n = normal, l = lognormal, b = beta
+ 1.0  0.8   					!Soil stiffness: Mean and COV (as a proportion of the mean). (Single layer only)
+ 50.0, 10.0						!horizontal and vertical SOF (single layer only)
+ !Multiple layer analysis options
+ 100						!boundary SOF
+ 8						!boundary SD (elements)
+ 2						!number of layers
+ 20,40,30,40,50,60,70				!Layer depth (elements)	(only needed for the n-1'th top layers)
+ 5,50,40,4,1,10					!Young's modulus of each layer
+ 1, 10						!standard deviation of Young's modulus for each layer
+ 0							!SD mode. 0=no variability, 1=variability across MC realisations, 2=2D RF for variability,3=2+1D RF for boreholes.
+ .false.						!ignore depths and properties of each layer, and instead read in explicit borehole depths from other file
+ .true.						!enforce fixed layer depths at boreholes despite added randomness, if the above option is set to true
+ 
+ 

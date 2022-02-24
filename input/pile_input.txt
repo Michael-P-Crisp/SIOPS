@@ -1,0 +1,29 @@
+ !Pile information
+.false.		! .true. for pile foundations, .false. for pad foundations (pads aren't supported in multi-layer mode)
+ 9, 9		!width of the pile in each dimension (elements)
+ 0.002		!Differential settlement design tolerance (mm/mm). Becomes an absolute settlement design tolerance as a multiple of pile spacing.
+ -1		!If positive, this value becomes the absolute design tolerance (mm).
+ 20		!number of pile depths to assess
+ 0.0001, 5000	!convergence tolerance and max number of iterations for FEM subroutine
+ 1		!how to treat layer boundaries at pile: (1) a single point in SI and CK, (2) inverse weighted in CK, (3) inverse weighted in SI and CK
+ .false.		!If true give the coordinates directly in a row of x coords and row of y coords, and each column is a pile. Otherwise, spread evenly over a grid.
+ 5		!Specify number of piles when giving direct coordinates
+ 1		!List of pile x coordinates (these lists are ignored if the above value is false)
+ 1		!List of pile y coordinates
+ 1		!Index of relative load for each pile
+ 6,6		!Specify a grid of X * Y piles (e.g. 5*5 = 25 total)
+ 41,41		!initial pile x,y offset from corner of soil in elements (must be >= soil radius)
+ 100,100		!foundation plan dimensions in the x,y directions (elements)
+ 1 1 1 1 1 1	!index of relative load for each pile
+ 1 1 1 1 1 1	!i.e with current settings, 1=0.25, 2=0.5, 3=1.0 based on tributary area. These values correspond to corner, edge and internal piles respectively assuming a rectangular building that is symmetrical in the x and y directions.
+ 1 1 1 1 1 1
+ 1 1 1 1 1 1
+ 1 1 1 1 1 1
+ 1 1 1 1 1 1
+ 0.25 0.5 1.0	!relative pile loads for each pile load cases
+ 1600		!Plan view area of a single floor in the building (i.e. 1600 = 40 m by 40 m, 400 = 20m by 20m. Should be less than or equal to the foundation area ideally). This is used in the building weight and structural cost calculation.
+ 3		!Number of floors
+ 8		!uniformly distributed load over 1 square metre. Recommend 8 kPa (5 dead load + 3 live load). Used in building weight calculation. Weight = unit applied load * plan area * No. Floors
+ 0.003,0.009	!lower and upper bound for linear differential settlement -> failure cost function
+ 47500000	!building cost
+ 200		!pile cost per metre

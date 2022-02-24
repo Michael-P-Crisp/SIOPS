@@ -1,0 +1,26 @@
+ !Site investigation information
+ 41,41		!initial borehole x,y offset from corner of soil in elements (ideally coincides with building plan). This is ignored with the EA.
+ 100,100		!dimensions of site investigation area in elements. This is ignored with the EA.
+ 2,2		!borehole step size in each dimension for the heat map mode
+ 6		!No. test types (leave at 6)
+ .true.		!use confidence interval to truncate unrealistic sample values (recommended, especially if used with 'add_errors' option.
+ 2.576		!confidence interval z score for the above truncation, recommend 99% (2.576)
+ .false.		!'add_errors' - add random errors to tested samples (highly recommended for realistic sampling)
+ !Below are test stats: Transformation error, bias error, measurement error, sampling frequency (elements), cost per metre.
+ 0 , 0 , 0,         3,  120, dct			!discrete testing, no errors
+ 0 , 0 , 0,         1,  77,  cts			!continuous testing, no errors
+ .20 , .40 , .25,   3,  156, SPT			!SPT
+ .15 , .20 , .15,   1,  77,  CPT			!CPT
+ .20, .20, 10e-30,  3,  330, TT			!Triaxial test
+ .15 , .15, .10,    3,  120, DMT			!DMT
+ 1,0.25		!standard deviations below the mean in the Geometric 'SD' reduction method. Percentile to use for the percentile reduction method. Recommend 1 and 0.25 currently.
+ !note: the following information is only relevant is read_si is set to false, in which case the investigations to assess are built using all combinations of the below parameters.
+ 2		!read_si parameter. 1 = Generate investigations from the below variables. 2 = read investigation configurations from 'input/si.txt' data. 3 = also read tests and depths on a per-borehole basis.
+ 5		!Number of borehole cases to investigate	Note: These 4 lines correspond to the 4 lines below them.
+ 1		!Number of tests to investigate
+ 1		!Number of reduction methods to investigate
+ 1		!Number of borehole depth cases to analyse
+ 1,4,9,16,25
+ 1,2,3,4,5,6	!Test numbers corresponding to the above tests
+ SA,GA,HA,1Q,SD	!Reduction methods
+ 40	!Borehole depths (elements)
