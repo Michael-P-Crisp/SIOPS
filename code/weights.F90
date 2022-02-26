@@ -186,8 +186,14 @@ z_coords(1)=0
   end do
 
 !do analysis once for each specified pile depth
-write(*,*) 'Analysing Pile Designs'
-write(*,*) 'Length (m)   settlement (mm)   time (s)'
+if (pile_foundation) then
+    write(*,*) 'Analysing Pile Designs'
+    write(*,*) 'Length (m)   settlement (mm)   time (s)'
+else
+    write(*,*) 'Analysing Pad Designs'
+    write(*,*) 'Width (m)   settlement (mm)   time (s)'
+end if
+
 do pd = 1,npdepths
      call cpu_time(start)
 
