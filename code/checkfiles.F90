@@ -9,11 +9,10 @@ module checkfiles
     !check to see that the neccessary data has been previously generated. If it hasn't, then automatically generate what's missing.
     !This subroutine also reads in the soil weights
 
-	subroutine checkdata(runmode,datafolder,npdepths,npl,nrep_MC,thismode,startstress,prad,soilweight)
+	subroutine checkdata(runmode,npdepths,npl,nrep_MC,thismode,startstress,prad,soilweight)
 	
 	!input variables
 	integer, intent(in) :: npdepths,npl,nrep_MC !number of pile depths, piles and monte carlo realisations
-	character(1000), intent(in) :: datafolder !location of data directory
 	character(2), intent(in) :: runmode
     real, allocatable, intent(out) :: soilweight(:,:,:,:)
     integer, intent(in) :: prad(2)
@@ -270,7 +269,7 @@ write(unit,*) ".false.						!.true. for variable, single layer analysis, .false.
 write(unit,*) 
 write(unit,*) "192 192 128	  	  			!number of x,y,z elements in original generated soil (must fit a*2^b)"
 write(unit,*) "80  80  40					!x,y,z dimensions of site (m)"
-write(unit,*) ".true.						!store soils in memory. Should use one very large soil in single layer mode."
+write(unit,*) "2						! 1. Generate individual soils in each MC realisation. 2. pre-generate soils and store in memory (Should use one very large soil in single layer mode) 3. Same as 2 but try and read in single layer soil from disk if available."
 write(unit,*) "5						!The upscale factor for single layer soils. Recommend 5."
 write(unit,*) "dlavx3	dlavx2					!correlation function for 3D and 2D LAS"
 write(unit,*) "0.5						!size of elements (cube length)"
@@ -326,7 +325,8 @@ write(unit,*) ".true.		!conduct a 2nd phase of genetic algorithm optimisation us
     
     open(unit,file='pile_input.txt')
     
- write(unit,*) "!Pile information"
+write(unit,*) "!Pile information"
+write(unit,*) ".true.   !.true. for pile foundations, .false. for pad foundations (which don't work in multi layer mode)"
 write(unit,*) "1, 1		!width of the pile in each dimension (elements)"
 write(unit,*) "0.002		!Differential settlement design tolerance (mm/mm). Becomes an absolute settlement design tolerance as a multiple of pile spacing."
 write(unit,*) "-1		!If positive, this value becomes the absolute design tolerance (mm)."
