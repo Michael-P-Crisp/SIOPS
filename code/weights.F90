@@ -47,6 +47,7 @@ subroutine getweights(esize,srad,nzef,prad,npdepths,pdepths,cg_tol,cg_limit,star
  use fem_main
  use variables
 
+
  IMPLICIT NONE
  INTEGER,PARAMETER::iwp=SELECTED_REAL_KIND(15),npri=1,nstep=1,nod=8,nip=8
  INTEGER::fixed_freedoms,i,iel,k,loaded_nodes,   &
@@ -152,7 +153,13 @@ end do
 
 
 nels = nxef*nyef*nzef
-nn = ((nxef+1)*(nyef+1)*(nzef+1))
+if (nod == 8) then
+    nn = ((nxef+1)*(nyef+1)*(nzef+1))
+else
+    nn = (2 * nzef + 1) * (nxef + 1) * (nyef + 1) ! all vertical lines of nodes
+    nn = nn + (nzef + 1) * (nxef + 1) * nyef ! intermediate nodes x direction
+    nn = nn + (nzef + 1) * (nyef + 1) * nxef ! intermediate nodes y direction
+end if
 
 
 
@@ -198,7 +205,7 @@ do pd = 1,npdepths
      call cpu_time(start)
 
      !set boundary restraints
-     call bc3d(nxef,nyef,nzef,nf,nodof,nn)
+     call bc3d(nxef,nyef,nzef,nf,nodof,nn, nod)
 
      !soil radius is pile position
     if (pile_foundation) then
@@ -217,7 +224,7 @@ do pd = 1,npdepths
 
 
      !set equation numbers and sort out tied pile nodes
-     call nfsort(nf,nxef,nyef,nzef,nn,tiednode,nxp,nyp,npl,temp_prad,temp_pdepths)
+     call nfsort(nf,nxef,nyef,nzef,nn,tiednode,nxp,nyp,npl,temp_prad,temp_pdepths, nod)
      
      !number of equations
       neq=MAXVAL(nf)

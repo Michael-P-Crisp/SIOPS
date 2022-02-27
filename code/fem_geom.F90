@@ -66,6 +66,7 @@ SUBROUTINE hexahedron_xz(iel,x_coords,y_coords,z_coords,coord,num)
    coord(1:4:3,3)=z_coords(is+1)
    coord(5:8:3,3)=z_coords(is+1)
 !
+   
  CASE(14)
    fac1=(2*nxe+1)*(2*nze+1)*(iq-1)
    fac2=(2*nxe+1)*(2*nze+1)*iq

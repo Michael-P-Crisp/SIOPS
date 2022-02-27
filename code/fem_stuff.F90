@@ -59,7 +59,7 @@ end function
   
   end subroutine
   
-  subroutine nfsort(nf,nxe,nye,nze,nn,nodenum,nxp,nyp,npl,prad,pdepth)
+  subroutine nfsort(nf,nxe,nye,nze,nn,nodenum,nxp,nyp,npl,prad,pdepth,nod)
   
   !This sorts out the equation numbers, and ties the node
   !freedoms at the top of the pile.
@@ -70,34 +70,74 @@ end function
   integer, intent(in) :: nxe,nye,nze,npl
   integer, allocatable :: ntied(:,:)
   integer, intent(in) :: pdepth
+  integer, intent(in) :: nod !number of nodes per element
+
+  integer alt, altz
+  logical edge, edgez ! true if looping along an element edge
   
 
-
-    nfix = (prad(1)+1)*(prad(2)+1)*(pdepth + 1) !number of tied nodes per pile
-    
-      
-    allocate(ntied(nfix(npl),npl))
-
-        
+  if (nod == 8) then
+      nfix = (prad(1)+1)*(prad(2)+1)*(pdepth + 1) !number of tied nodes per pile
+      allocate(ntied(nfix(npl),npl))
+              
       do L=1,npl
-           ic = 0
-         do i = nyp(L), nyp(L)+prad(2)
-            ns = (i)*(nxe+1)*(nze+1)
-            do j = nxp(L), nxp(L)+prad(1)
-            	do k = 0,pdepth
-               		ic = ic + 1
-               		ntied(ic,L) = ns + (j + 1) + (nxe+1)*k 
-               	end do
-            end do
-         end do
-         nf(1:2,ntied(1,L)) = 0 !fix node in horizontal displacement
-         do i = 2, nfix(L)			! and set corresponding
-            nf(1:3,ntied(i,L)) = 0		! equation numbers to 0 for now
-         end do
+          ic = 0
+        do i = nyp(L), nyp(L)+prad(2)
+          ns = (i)*(nxe+1)*(nze+1)
+          do j = nxp(L), nxp(L)+prad(1)
+            do k = 0,pdepth
+                  ic = ic + 1
+                  ntied(ic,L) = ns + (j + 1) + (nxe+1)*k 
+                end do
+          end do
+        end do
+        nf(1:2,ntied(1,L)) = 0 !fix node in horizontal displacement
+        do i = 2, nfix(L)			! and set corresponding
+          nf(1:3,ntied(i,L)) = 0		! equation numbers to 0 for now
+        end do
       end do
-      
-      
-      
+  else
+      nfix = (2 * pdepth + 1) * (prad(1) + 1) * (prad(2) + 1) ! all vertical lines of nodes
+      nfix = nfix + (pdepth + 1) * (prad(1) + 1) * prad(2) ! intermediate nodes x direction
+      nfix = nfix + (pdepth + 1) * (prad(2) + 1) * prad(1) ! intermediate nodes y direction
+      allocate(ntied(nfix(npl),npl))
+
+
+      do L=1,npl
+          ic = 0
+        edge = .true.
+        do i = nyp(L) * 2, (nyp(L)+prad(2)) * 2
+            ns = i * ((2 * nze + 1) * (nxe + 1) + (nze + 1) * nxe + (nze + 1) * (nxe + 1))
+
+            if (edge) then
+              alt = 2
+            else
+              alt = 1
+            end if
+
+            do j = nxp(L) * alt, (nxp(L) + prad(1)) * alt
+
+                if (edgez) then
+                  altz = 2
+                else
+                  altz = 1
+                end if
+
+                do k = 0,pdepth * altz
+                    ic = ic + 1
+                    ntied(ic,L) = ns + (j + 1) + (nxe * alt + 1) * k 
+                end do
+                edgez = .not. edgez
+            end do
+            edge = .not. edge
+        end do
+        nf(1:2,ntied(1,L)) = 0 !fix node in horizontal displacement
+        do i = 2, nfix(L)			! and set corresponding
+          nf(1:3,ntied(i,L)) = 0		! equation numbers to 0 for now
+        end do
+      end do
+  end if
+
 
       
 !c						number equations via nf-array
@@ -132,6 +172,8 @@ end function
   integer nxp(1),nfix
   integer, intent(in) :: nxe,nye
   integer ntied((prad+1)*(pdepth + 1),1),npl
+
+
 
   
   L=1
@@ -182,92 +224,258 @@ end function
          
   end subroutine
   
-  subroutine bc3d(nxe,nye,nze,nfo,nodof,nn)
+  subroutine bc3d(nxe,nye,nze,nfo,nodof,nn, nod)
   
   !This subroutine sets the restraints on the sides and
   !bottom of the soil, for the 8 node brick case.
-  !It shouldn't be too hard to write new code for the 14
-  !and 20 cases.
+  !Also, experimental support for 20 node brick case
   
       integer nfo(:,:),nxe,nye,nze,nodof,nn
-      integer nm,j,k,i
+      integer, intent(in) :: nod ! number of elements per node
+      integer nm,j,k,i,alt, altz
       integer nf(nn,nodof)
+      logical edge, edgez ! true if looping along an element edge
       
+
       nm=0
-      do j=1,nze
-        nm=nm+1
-        nf(nm,1)=0
-        nf(nm,2)=0
-        nf(nm,3) = 1
-        do k=2,nxe
-          nm=nm+1
-          nf(nm,1) = 1
-          nf(nm,2)=0
-          nf(nm,3) = 1
-        end do
-        nm=nm+1
-        nf(nm,1)=0
-        nf(nm,2)=0
-        nf(nm,3) = 1
-    end do
-      do  k=1,nxe+1
-        nm=nm+1
-        nf(nm,1)=0
-        nf(nm,2)=0
-        nf(nm,3)=0
-      end do
-      do i=2,nye
+
+      if (nod == 8) then
+
+        ! loop through south side
         do j=1,nze
           nm=nm+1
+          ! south-west edge of soil, laterally restrained
           nf(nm,1)=0
-          nf(nm,2) = 1
+          nf(nm,2)=0
           nf(nm,3) = 1
+          ! south side of soil, restrained in y direction
           do k=2,nxe
             nm=nm+1
             nf(nm,1) = 1
-            nf(nm,2) = 1
+            nf(nm,2)=0
             nf(nm,3) = 1
-         end do
+          end do
+          ! south-east edge of soil, laterally restrained
           nm=nm+1
           nf(nm,1)=0
-          nf(nm,2) = 1
+          nf(nm,2)=0
           nf(nm,3) = 1
         end do
+        ! south bottom edge, fully fixed
+        do  k=1,nxe+1
+          nm=nm+1
+          nf(nm,1)=0
+          nf(nm,2)=0
+          nf(nm,3)=0
+        end do
+        ! loop through slices of the soil parallel to the x direction
+        do i=2,nye
+          do j=1,nze
+            ! east side of soil, restrained in x direction
+            nm=nm+1
+            nf(nm,1)=0
+            nf(nm,2) = 1
+            nf(nm,3) = 1
+            ! all internal nodes, free to move
+            do k=2,nxe
+              nm=nm+1
+              nf(nm,1) = 1
+              nf(nm,2) = 1
+              nf(nm,3) = 1
+            end do
+            ! west side of soil, restrained in x direction
+            nm=nm+1
+            nf(nm,1)=0
+            nf(nm,2) = 1
+            nf(nm,3) = 1
+          end do
+          ! bottom nodes, fully fixed
+          do k=1,nxe+1
+            nm=nm+1
+            nf(nm,1)=0
+            nf(nm,2)=0
+            nf(nm,3)=0
+          end do
+        end do
+        do j=1,nze
+          nm=nm+1
+          ! north west edge of soil, laterally restrained
+          nf(nm,1)=0
+          nf(nm,2)=0
+          nf(nm,3) = 1
+          do k=2,nxe
+            nm=nm+1
+            ! north side of soil, restrained in y direction
+            nf(nm,1) = 1
+            nf(nm,2)=0
+            nf(nm,3) = 1
+          end do
+          ! north east edge of soil, laterally restrained
+          nm=nm+1
+          nf(nm,1)=0
+          nf(nm,2)=0
+          nf(nm,3) = 1
+        end do
+        ! north bottom edge of soil, fully fixed
         do k=1,nxe+1
           nm=nm+1
           nf(nm,1)=0
           nf(nm,2)=0
           nf(nm,3)=0
         end do
-    end do
-      do j=1,nze
-        nm=nm+1
-        nf(nm,1)=0
-        nf(nm,2)=0
-        nf(nm,3) = 1
-        do k=2,nxe
+        
+
+      else if (nod == 20) then
+
+        edge = .true.
+
+                ! loop through south side
+        do j=1,nze * 2
           nm=nm+1
-          nf(nm,1) = 1
+          ! south-west edge of soil, laterally restrained
+          nf(nm,1)=0
           nf(nm,2)=0
           nf(nm,3) = 1
+          ! south side of soil, restrained in y direction
+
+          if (edge) then
+            alt = 2
+          else
+            alt = 1
+          end if
+          
+          do k= 2, (nxe * alt)
+            nm=nm+1
+            nf(nm,1) = 1
+            nf(nm,2)=0
+            nf(nm,3) = 1
+          end do
+
+          ! south-east edge of soil, laterally restrained
+          nm=nm+1
+          nf(nm,1)=0
+          nf(nm,2)=0
+          nf(nm,3) = 1
+
+          edge = .not. edge
+
         end do
-        nm=nm+1
-        nf(nm,1)=0
-        nf(nm,2)=0
-        nf(nm,3) = 1
-    end do
-      do k=1,nxe+1
-        nm=nm+1
-        nf(nm,1)=0
-        nf(nm,2)=0
-        nf(nm,3)=0
-      end do
-      
+        ! south bottom edge, fully fixed
+        do  k=1, nxe * 2 + 1
+          nm=nm+1
+          nf(nm,1)=0
+          nf(nm,2)=0
+          nf(nm,3)=0
+        end do
+        ! loop through slices of the soil parallel to the x direction
+        edge = .false.
+        edgez = .false.
+        do i=2,nye * 2
+
+          if (edgez) then
+            altz = 2
+          else
+            altz = 1
+          end if
+
+          do j=1,nze * altz
+            ! east side of soil, restrained in x direction
+            nm=nm+1
+            nf(nm,1)=0
+            nf(nm,2) = 1
+            nf(nm,3) = 1
+            ! all internal nodes, free to move
+
+            if (edge) then
+              alt = 2
+            else
+              alt = 1
+            end if
+
+            do k=2,nxe*alt
+              nm=nm+1
+              nf(nm,1) = 1
+              nf(nm,2) = 1
+              nf(nm,3) = 1
+            end do
+            ! west side of soil, restrained in x direction
+            nm=nm+1
+            nf(nm,1)=0
+            nf(nm,2) = 1
+            nf(nm,3) = 1
+
+            edge = .not. edge
+            
+          end do
+
+          if (edgez) then
+            altz = 2
+          else
+            altz = 1
+          end if
+          
+          ! bottom nodes, fully fixed
+          do k=1,nxe * altz + 1
+            nm=nm+1
+            nf(nm,1)=0
+            nf(nm,2)=0
+            nf(nm,3)=0
+          end do
+
+          edgez = .not. edgez
+        end do
+
+        edge = .true.
+        do j=1,nze * 2
+          nm=nm+1
+          ! north west edge of soil, laterally restrained
+          nf(nm,1)=0
+          nf(nm,2)=0
+          nf(nm,3) = 1
+
+
+          if (edge) then
+            alt = 2
+          else
+            alt = 1
+          end if
+
+          do k=2,nxe * alt
+            nm=nm+1
+            ! north side of soil, restrained in y direction
+            nf(nm,1) = 1
+            nf(nm,2)=0
+            nf(nm,3) = 1
+          end do
+          ! north east edge of soil, laterally restrained
+          nm=nm+1
+          nf(nm,1)=0
+          nf(nm,2)=0
+          nf(nm,3) = 1
+
+          edge = .not. edge
+        end do
+        ! north bottom edge of soil, fully fixed
+        do k=1,nxe*2+1
+          nm=nm+1
+          nf(nm,1)=0
+          nf(nm,2)=0
+          nf(nm,3)=0
+        end do
+
+      else
+
+          write(*,*) 'Incorrect number of nodes selected'
+          stop
+      end if
+
+
       !the FEM subroutine from the book has this indexing
       !reversed, so swap the indexes.
       nfo(1,:)=nf(:,1)
       nfo(2,:)=nf(:,2)
       nfo(3,:)=nf(:,3)
+        
 
       
       return

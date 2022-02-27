@@ -174,11 +174,11 @@ nn = ((nxe+1)*(nxe+1)*(nze+1))
 
 
      !set boundary restraints
-     call bc3d(nxe,nxe,nze,nf,nodof,nn)
+     call bc3d(nxe,nxe,nze,nf,nodof,nn,nod)
 
 
      !set equation numbers and sort out tied pile nodes
-     call nfsort(nf,nxe,nxe,nze,nn,tiednode,nxp,nyp,npl,prad,pd)
+     call nfsort(nf,nxe,nxe,nze,nn,tiednode,nxp,nyp,npl,prad,pd, nod)
      
      !number of equations
       neq=MAXVAL(nf)
